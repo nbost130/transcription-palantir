@@ -19,6 +19,7 @@ import { jobRoutes } from './routes/jobs.js';
 import { metricsRoutes } from './routes/metrics.js';
 import { monitorRoutes } from './routes/monitor.js';
 import { websocketRoutes } from './routes/websocket.js';
+import { systemRoutes } from './routes/system.js';
 import { errorHandler } from './middleware/error.js';
 import { requestLogger } from './middleware/logger.js';
 
@@ -136,6 +137,7 @@ export class ApiServer {
         tags: [
           { name: 'health', description: 'Health check endpoints' },
           { name: 'jobs', description: 'Job management endpoints' },
+          { name: 'system', description: 'System information and configuration' },
           { name: 'metrics', description: 'Prometheus metrics endpoints' },
           { name: 'monitoring', description: 'Queue and worker monitoring' },
           { name: 'websocket', description: 'Real-time updates via WebSocket' },
@@ -205,6 +207,9 @@ export class ApiServer {
 
     // Job management routes
     fastify.register(jobRoutes, { prefix });
+
+    // System information routes
+    fastify.register(systemRoutes, { prefix });
 
     // Metrics routes (Prometheus)
     fastify.register(metricsRoutes, { prefix });
