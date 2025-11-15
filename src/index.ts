@@ -91,9 +91,6 @@ class TranscriptionPalantir {
   private async closeServices(): Promise<void> {
     logger.info('Closing services...');
 
-    // Close API server
-    await apiServer.stop();
-
     // Close queue service
     await transcriptionQueue.close();
     logger.info('✅ Queue service closed');

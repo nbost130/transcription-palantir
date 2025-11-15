@@ -13,6 +13,7 @@ import { appConfig } from '../config/index.js';
 import { transcriptionQueue } from './queue.js';
 import { JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js';
 import { randomUUID } from 'crypto';
+import { getMimeType } from '../utils/file.js';
 
 // =============================================================================
 // FILE WATCHER SERVICE
@@ -226,7 +227,7 @@ export class FileWatcherService {
         extension,
         fileSizeMB,
         fileSize: stats.size,
-        mimeType: this.getMimeType(extension),
+        mimeType: getMimeType(extension),
         priority,
         createdAt: stats.birthtime,
         modifiedAt: stats.mtime,
@@ -309,20 +310,6 @@ export class FileWatcherService {
         `Cannot access watch directory: ${dirPath} - ${(error as Error).message}`
       );
     }
-  }
-
-  private getMimeType(extension: string): string {
-    const mimeTypes: Record<string, string> = {
-      mp3: 'audio/mpeg',
-      wav: 'audio/wav',
-      m4a: 'audio/mp4',
-      flac: 'audio/flac',
-      ogg: 'audio/ogg',
-      mp4: 'video/mp4',
-      mov: 'video/quicktime',
-    };
-
-    return mimeTypes[extension] || 'application/octet-stream';
   }
 
   // ===========================================================================

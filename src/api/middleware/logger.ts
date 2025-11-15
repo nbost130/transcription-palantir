@@ -17,6 +17,9 @@ export async function requestLogger(
 ): Promise<void> {
   const startTime = Date.now();
 
+  // Attach start time to request for response time calculation
+  (request as any).startTime = startTime;
+
   // Log incoming request
   logger.info({
     requestId: request.id,

@@ -165,13 +165,8 @@ export class ApiServer {
   // ===========================================================================
 
   private registerMiddleware(fastify: FastifyInstance): void {
-    // Request logging
+    // Request logging (also attaches startTime to request)
     fastify.addHook('onRequest', requestLogger);
-
-    // Add request timestamp
-    fastify.addHook('onRequest', async (request, reply) => {
-      (request as any).startTime = Date.now();
-    });
 
     // Add response time header
     fastify.addHook('onSend', async (request, reply) => {

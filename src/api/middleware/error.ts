@@ -59,52 +59,48 @@ export async function errorHandler(
     return;
   }
 
-  // Handle rate limit errors
-  if (error.statusCode === 429) {
-    reply.status(429).send({
-      success: false,
-      error: 'Too many requests',
-      message: 'Rate limit exceeded. Please try again later.',
-      timestamp: new Date().toISOString(),
-      requestId,
-    });
-    return;
-  }
+  // Handle specific HTTP status codes
+  const timestamp = new Date().toISOString();
+  switch (error.statusCode) {
+    case 401:
+      reply.status(401).send({
+        success: false,
+        error: 'Unauthorized',
+        message: 'Authentication required',
+        timestamp,
+        requestId,
+      });
+      return;
 
-  // Handle not found errors
-  if (error.statusCode === 404) {
-    reply.status(404).send({
-      success: false,
-      error: 'Not found',
-      message: error.message || 'Resource not found',
-      timestamp: new Date().toISOString(),
-      requestId,
-    });
-    return;
-  }
+    case 403:
+      reply.status(403).send({
+        success: false,
+        error: 'Forbidden',
+        message: 'Access denied',
+        timestamp,
+        requestId,
+      });
+      return;
 
-  // Handle unauthorized errors
-  if (error.statusCode === 401) {
-    reply.status(401).send({
-      success: false,
-      error: 'Unauthorized',
-      message: 'Authentication required',
-      timestamp: new Date().toISOString(),
-      requestId,
-    });
-    return;
-  }
+    case 404:
+      reply.status(404).send({
+        success: false,
+        error: 'Not found',
+        message: error.message || 'Resource not found',
+        timestamp,
+        requestId,
+      });
+      return;
 
-  // Handle forbidden errors
-  if (error.statusCode === 403) {
-    reply.status(403).send({
-      success: false,
-      error: 'Forbidden',
-      message: 'Access denied',
-      timestamp: new Date().toISOString(),
-      requestId,
-    });
-    return;
+    case 429:
+      reply.status(429).send({
+        success: false,
+        error: 'Too many requests',
+        message: 'Rate limit exceeded. Please try again later.',
+        timestamp,
+        requestId,
+      });
+      return;
   }
 
   // Default error response

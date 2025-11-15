@@ -5,6 +5,8 @@
  */
 
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
+import { stat } from 'fs/promises';
+import { basename, extname } from 'path';
 import { transcriptionQueue } from '../../services/queue.js';
 import {
   JobCreateSchema,
@@ -17,6 +19,7 @@ import {
   type PaginatedResponse,
 } from '../../types/index.js';
 import { randomUUID } from 'crypto';
+import { getMimeType } from '../../utils/file.js';
 
 // =============================================================================
 // JOB ROUTES
@@ -71,15 +74,29 @@ export async function jobRoutes(
 
     // Extract file information
     const filePath: string = validated.filePath;
-    const fileName: string = filePath.split('/').pop() || 'unknown';
-    const fileExtension: string = fileName.split('.').pop()?.toLowerCase() || 'unknown';
+    const fileName: string = basename(filePath);
+    const fileExtension: string = extname(fileName).slice(1).toLowerCase() || 'unknown';
+
+    // Get actual file size
+    let fileSize: number;
+    try {
+      const stats = await stat(filePath);
+      fileSize = stats.size;
+    } catch (err) {
+      return reply.code(400).send({
+        success: false,
+        error: 'File not found or inaccessible',
+        timestamp: new Date().toISOString(),
+        requestId: request.id,
+      });
+    }
 
     // Create job data
     const jobData: Partial<TranscriptionJob> = {
       id: randomUUID(),
       fileName,
       filePath,
-      fileSize: 0, // TODO: Get actual file size
+      fileSize,
       mimeType: getMimeType(fileExtension),
       status: JobStatus.PENDING,
       priority: validated.priority || JobPriority.NORMAL,
@@ -282,10 +299,10 @@ export async function jobRoutes(
 
   fastify.patch<{
     Params: { jobId: string };
-    Body: { status?: JobStatus; priority?: JobPriority; metadata?: any };
+    Body: { priority?: JobPriority; metadata?: any };
   }>('/jobs/:jobId', {
     schema: {
-      description: 'Update a job',
+      description: 'Update a job (metadata only, use /retry or DELETE for status changes)',
       tags: ['jobs'],
       params: {
         type: 'object',
@@ -297,13 +314,10 @@ export async function jobRoutes(
       body: {
         type: 'object',
         properties: {
-          status: {
-            type: 'string',
-            enum: Object.values(JobStatus),
-          },
           priority: {
             type: 'number',
             enum: [1, 2, 3, 4],
+            description: 'Note: Priority changes not supported after job creation',
           },
           metadata: { type: 'object' },
         },
@@ -489,22 +503,4 @@ export async function jobRoutes(
 
     return response;
   });
-}
-
-// =============================================================================
-// HELPER FUNCTIONS
-// =============================================================================
-
-function getMimeType(extension: string): string {
-  const mimeTypes: Record<string, string> = {
-    mp3: 'audio/mpeg',
-    wav: 'audio/wav',
-    m4a: 'audio/mp4',
-    flac: 'audio/flac',
-    ogg: 'audio/ogg',
-    mp4: 'video/mp4',
-    mov: 'video/quicktime',
-  };
-
-  return mimeTypes[extension] || 'application/octet-stream';
 }

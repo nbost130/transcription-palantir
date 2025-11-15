@@ -94,7 +94,6 @@ export interface JobCreateRequest {
 }
 
 export interface JobUpdateRequest {
-  status?: JobStatus;
   priority?: JobPriority;
   metadata?: Partial<JobMetadata>;
 }
@@ -223,7 +222,8 @@ export const JobCreateSchema = z.object({
 });
 
 export const JobUpdateSchema = z.object({
-  status: z.nativeEnum(JobStatus).optional(),
+  // Note: status updates are not supported via this endpoint
+  // Use specific endpoints for job control: /retry, /delete
   priority: z.nativeEnum(JobPriority).optional(),
   metadata: z.object({}).passthrough().optional(),
 });
