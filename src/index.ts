@@ -7,6 +7,9 @@
 import { logger, logFatalError } from './utils/logger.js';
 import { appConfig } from './config/index.js';
 import { transcriptionQueue } from './services/queue.js';
+import { apiServer } from './api/server.js';
+import { fileWatcher } from './services/file-watcher.js';
+import { transcriptionWorker } from './workers/transcription-worker.js';
 
 // =============================================================================
 // APPLICATION CLASS
@@ -81,9 +84,7 @@ class TranscriptionPalantir {
 
     // TODO: Initialize other services
     // - File watcher service
-    // - API server
     // - Worker manager
-    // - Health check service
     // - Metrics service
   }
 
@@ -104,11 +105,16 @@ class TranscriptionPalantir {
   private async startComponents(): Promise<void> {
     logger.info('Starting application components...');
 
-    // TODO: Start components
-    // - API server
-    // - File watcher
-    // - Worker processes
-    // - Health monitoring
+    // Start API server
+    await apiServer.start();
+
+    // Start transcription worker
+    await transcriptionWorker.start();
+
+    // Start file watcher
+    await fileWatcher.start();
+
+    // TODO: Start other components
     // - Metrics collection
 
     logger.info('✅ All components started');
@@ -117,8 +123,15 @@ class TranscriptionPalantir {
   private async stopComponents(): Promise<void> {
     logger.info('Stopping application components...');
 
-    // TODO: Stop components gracefully
-    
+    // Stop file watcher (stop accepting new jobs first)
+    await fileWatcher.stop();
+
+    // Stop transcription worker (finish processing current jobs)
+    await transcriptionWorker.stop();
+
+    // Stop API server
+    await apiServer.stop();
+
     logger.info('✅ All components stopped');
   }
 
