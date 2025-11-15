@@ -55,11 +55,13 @@ export class FileWatcherService {
 
       this.isRunning = true;
 
-      logger.info({
-        watchDirectory: appConfig.processing.watchDirectory,
-        supportedFormats: appConfig.processing.supportedFormats,
-      }, '👁️ File watcher started successfully');
-
+      logger.info(
+        {
+          watchDirectory: appConfig.processing.watchDirectory,
+          supportedFormats: appConfig.processing.supportedFormats,
+        },
+        '👁️ File watcher started successfully'
+      );
     } catch (error) {
       logger.error({ error }, 'Failed to start file watcher');
       throw error;
@@ -138,10 +140,13 @@ export class FileWatcherService {
       // Validate file
       const validation = await this.validateFile(filePath);
       if (!validation.valid) {
-        logger.warn({
-          filePath,
-          reason: validation.reason,
-        }, 'File validation failed, skipping');
+        logger.warn(
+          {
+            filePath,
+            reason: validation.reason,
+          },
+          'File validation failed, skipping'
+        );
         return;
       }
 
@@ -152,12 +157,14 @@ export class FileWatcherService {
 
       // Mark as processed
       this.processedFiles.add(filePath);
-
     } catch (error) {
-      logger.error({
-        error,
-        filePath,
-      }, 'Error handling file');
+      logger.error(
+        {
+          error,
+          filePath,
+        },
+        'Error handling file'
+      );
     }
   }
 
@@ -234,7 +241,6 @@ export class FileWatcherService {
       };
 
       return { valid: true, metadata };
-
     } catch (error) {
       return {
         valid: false,
@@ -247,10 +253,7 @@ export class FileWatcherService {
   // JOB CREATION
   // ===========================================================================
 
-  private async createJobForFile(
-    filePath: string,
-    metadata: FileMetadata
-  ): Promise<void> {
+  private async createJobForFile(filePath: string, metadata: FileMetadata): Promise<void> {
     try {
       const jobData: Partial<TranscriptionJob> = {
         id: randomUUID(),
@@ -274,19 +277,24 @@ export class FileWatcherService {
 
       const job = await transcriptionQueue.addJob(jobData);
 
-      logger.info({
-        jobId: job.id,
-        fileName: metadata.fileName,
-        fileSize: `${metadata.fileSizeMB.toFixed(2)}MB`,
-        priority: metadata.priority,
-      }, '✅ Transcription job created');
-
+      logger.info(
+        {
+          jobId: job.id,
+          fileName: metadata.fileName,
+          fileSize: `${metadata.fileSizeMB.toFixed(2)}MB`,
+          priority: metadata.priority,
+        },
+        '✅ Transcription job created'
+      );
     } catch (error) {
-      logger.error({
-        error,
-        filePath,
-        fileName: metadata.fileName,
-      }, 'Failed to create transcription job');
+      logger.error(
+        {
+          error,
+          filePath,
+          fileName: metadata.fileName,
+        },
+        'Failed to create transcription job'
+      );
       throw error;
     }
   }
@@ -306,9 +314,7 @@ export class FileWatcherService {
 
       logger.debug({ dirPath }, 'Directory verified');
     } catch (error) {
-      throw new Error(
-        `Cannot access watch directory: ${dirPath} - ${(error as Error).message}`
-      );
+      throw new Error(`Cannot access watch directory: ${dirPath} - ${(error as Error).message}`);
     }
   }
 

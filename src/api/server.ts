@@ -227,14 +227,16 @@ export class ApiServer {
 
       this.isRunning = true;
 
-      logger.info({
-        port: appConfig.port,
-        environment: appConfig.env,
-        apiPrefix: appConfig.api.prefix,
-      }, '🚀 API server started successfully');
+      logger.info(
+        {
+          port: appConfig.port,
+          environment: appConfig.env,
+          apiPrefix: appConfig.api.prefix,
+        },
+        '🚀 API server started successfully'
+      );
 
       logger.info(`📚 API Documentation available at: http://localhost:${appConfig.port}/docs`);
-
     } catch (error) {
       logger.error({ error }, 'Failed to start API server');
       throw error;

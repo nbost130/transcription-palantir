@@ -46,29 +46,27 @@ export class TranscriptionWorker {
     try {
       await redisConnection.connect();
 
-      this.worker = new Worker(
-        'transcription',
-        async (job: Job) => await this.processJob(job),
-        {
-          connection: redisConnection,
-          concurrency: appConfig.processing.maxWorkers,
-          limiter: {
-            max: appConfig.processing.maxWorkers,
-            duration: 1000,
-          },
-        }
-      );
+      this.worker = new Worker('transcription', async (job: Job) => await this.processJob(job), {
+        connection: redisConnection,
+        concurrency: appConfig.processing.maxWorkers,
+        limiter: {
+          max: appConfig.processing.maxWorkers,
+          duration: 1000,
+        },
+      });
 
       // Setup event listeners
       this.setupEventListeners();
 
       this.isRunning = true;
 
-      logger.info({
-        concurrency: appConfig.processing.maxWorkers,
-        whisperModel: appConfig.whisper.model,
-      }, '⚙️ Transcription worker started successfully');
-
+      logger.info(
+        {
+          concurrency: appConfig.processing.maxWorkers,
+          whisperModel: appConfig.whisper.model,
+        },
+        '⚙️ Transcription worker started successfully'
+      );
     } catch (error) {
       logger.error({ error }, 'Failed to start transcription worker');
       throw error;
@@ -90,11 +88,13 @@ export class TranscriptionWorker {
 
       this.isRunning = false;
 
-      logger.info({
-        processedJobs: this.processedJobs,
-        failedJobs: this.failedJobs,
-      }, '✅ Transcription worker stopped gracefully');
-
+      logger.info(
+        {
+          processedJobs: this.processedJobs,
+          failedJobs: this.failedJobs,
+        },
+        '✅ Transcription worker stopped gracefully'
+      );
     } catch (error) {
       logger.error({ error }, 'Error stopping transcription worker');
       throw error;
@@ -110,28 +110,37 @@ export class TranscriptionWorker {
 
     this.worker.on('completed', (job: Job) => {
       this.processedJobs++;
-      logger.info({
-        jobId: job.id,
-        fileName: job.data.fileName,
-        duration: job.finishedOn ? job.finishedOn - (job.processedOn || 0) : 0,
-      }, '✅ Job completed successfully');
+      logger.info(
+        {
+          jobId: job.id,
+          fileName: job.data.fileName,
+          duration: job.finishedOn ? job.finishedOn - (job.processedOn || 0) : 0,
+        },
+        '✅ Job completed successfully'
+      );
     });
 
     this.worker.on('failed', (job: Job | undefined, error: Error) => {
       this.failedJobs++;
-      logger.error({
-        jobId: job?.id,
-        fileName: job?.data.fileName,
-        error: error.message,
-        attemptsMade: job?.attemptsMade,
-      }, '❌ Job failed');
+      logger.error(
+        {
+          jobId: job?.id,
+          fileName: job?.data.fileName,
+          error: error.message,
+          attemptsMade: job?.attemptsMade,
+        },
+        '❌ Job failed'
+      );
     });
 
     this.worker.on('active', (job: Job) => {
-      logger.info({
-        jobId: job.id,
-        fileName: job.data.fileName,
-      }, '▶️ Job started processing');
+      logger.info(
+        {
+          jobId: job.id,
+          fileName: job.data.fileName,
+        },
+        '▶️ Job started processing'
+      );
     });
 
     this.worker.on('stalled', (jobId: string) => {
@@ -151,11 +160,14 @@ export class TranscriptionWorker {
     const jobData: TranscriptionJob = job.data;
     const startTime = Date.now();
 
-    logger.info({
-      jobId: job.id,
-      fileName: jobData.fileName,
-      filePath: jobData.filePath,
-    }, 'Processing transcription job');
+    logger.info(
+      {
+        jobId: job.id,
+        fileName: jobData.fileName,
+        filePath: jobData.filePath,
+      },
+      'Processing transcription job'
+    );
 
     try {
       // Update job progress
@@ -190,12 +202,15 @@ export class TranscriptionWorker {
 
       await job.updateProgress(100);
 
-      logger.info({
-        jobId: job.id,
-        fileName: jobData.fileName,
-        transcriptPath,
-        processingTime: `${(processingTime / 1000).toFixed(2)}s`,
-      }, '✅ Transcription completed successfully');
+      logger.info(
+        {
+          jobId: job.id,
+          fileName: jobData.fileName,
+          transcriptPath,
+          processingTime: `${(processingTime / 1000).toFixed(2)}s`,
+        },
+        '✅ Transcription completed successfully'
+      );
 
       return {
         success: true,
@@ -203,13 +218,15 @@ export class TranscriptionWorker {
         processingTime,
         completedAt: new Date().toISOString(),
       };
-
     } catch (error) {
-      logger.error({
-        jobId: job.id,
-        fileName: jobData.fileName,
-        error,
-      }, '❌ Transcription failed');
+      logger.error(
+        {
+          jobId: job.id,
+          fileName: jobData.fileName,
+          error,
+        },
+        '❌ Transcription failed'
+      );
 
       // Move failed file
       await this.moveFailedFile(jobData.filePath).catch(() => {});
@@ -242,14 +259,14 @@ export class TranscriptionWorker {
 
       if (useSimulation) {
         // Simulate transcription process
-        this.simulateTranscription(inputPath, outputPath, onProgress)
-          .then(resolve)
-          .catch(reject);
+        this.simulateTranscription(inputPath, outputPath, onProgress).then(resolve).catch(reject);
         return;
       }
 
       // If not using simulation, reject since Whisper is not configured
-      reject(new Error('Whisper.cpp is not configured. Set useSimulation to true or configure Whisper.'));
+      reject(
+        new Error('Whisper.cpp is not configured. Set useSimulation to true or configure Whisper.')
+      );
 
       // Real Whisper.cpp execution (uncomment when Whisper is installed)
       /*
@@ -297,7 +314,7 @@ export class TranscriptionWorker {
     // Simulate processing time based on file size
     const simulationSteps = 10;
     for (let i = 0; i <= simulationSteps; i++) {
-      await new Promise(resolve => setTimeout(resolve, 200)); // 200ms per step
+      await new Promise((resolve) => setTimeout(resolve, 200)); // 200ms per step
       await onProgress(i / simulationSteps);
     }
 
@@ -387,9 +404,10 @@ To enable real transcription:
     return {
       processedJobs: this.processedJobs,
       failedJobs: this.failedJobs,
-      successRate: this.processedJobs > 0
-        ? ((this.processedJobs / (this.processedJobs + this.failedJobs)) * 100).toFixed(2)
-        : 0,
+      successRate:
+        this.processedJobs > 0
+          ? ((this.processedJobs / (this.processedJobs + this.failedJobs)) * 100).toFixed(2)
+          : 0,
     };
   }
 }

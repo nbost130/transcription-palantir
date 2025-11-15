@@ -1,6 +1,6 @@
 /**
  * 🔮 Transcription Palantir - Configuration Management
- * 
+ *
  * Centralized configuration with environment-specific overrides
  */
 
@@ -179,15 +179,21 @@ export function getRedisUrl(): string {
 
 export function getWhisperCommand(inputFile: string, outputFile: string): string[] {
   const { binaryPath, model, computeType, language, task } = appConfig.whisper;
-  
+
   return [
     binaryPath,
-    '--model', model,
-    '--compute_type', computeType,
-    '--language', language,
-    '--task', task,
-    '--output_format', 'txt',
-    '--output_file', outputFile,
-    inputFile
+    '--model',
+    model,
+    '--compute_type',
+    computeType,
+    '--language',
+    language,
+    '--task',
+    task,
+    '--output_format',
+    'txt',
+    '--output_file',
+    outputFile,
+    inputFile,
   ];
 }

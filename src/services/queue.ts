@@ -1,6 +1,6 @@
 /**
  * 🔮 Transcription Palantir - Queue Service
- * 
+ *
  * BullMQ-based job queue management for transcription tasks
  */
 
@@ -63,7 +63,7 @@ export class TranscriptionQueue {
       await redisConnection.connect();
       await this.queue.waitUntilReady();
       await this.queueEvents.waitUntilReady();
-      
+
       this.isInitialized = true;
       queueLogger.info('Transcription queue initialized successfully');
     } catch (error) {
@@ -79,7 +79,7 @@ export class TranscriptionQueue {
       await this.queueEvents.close();
       await this.queue.close();
       await redisConnection.quit();
-      
+
       this.isInitialized = false;
       queueLogger.info('Transcription queue closed successfully');
     } catch (error) {
@@ -97,15 +97,11 @@ export class TranscriptionQueue {
       throw new Error('Queue not initialized');
     }
 
-    const job = await this.queue.add(
-      'transcribe',
-      jobData,
-      {
-        priority: jobData.priority || JobPriority.NORMAL,
-        ...(jobData.id && { jobId: jobData.id }),
-        delay: this.calculateDelay(jobData.priority),
-      }
-    );
+    const job = await this.queue.add('transcribe', jobData, {
+      priority: jobData.priority || JobPriority.NORMAL,
+      ...(jobData.id && { jobId: jobData.id }),
+      delay: this.calculateDelay(jobData.priority),
+    });
 
     logQueueEvent('job_added', {
       jobId: job.id || undefined,

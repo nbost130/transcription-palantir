@@ -1,6 +1,6 @@
 /**
  * 🔮 Transcription Palantir - Type Definitions
- * 
+ *
  * Core type definitions for the transcription system
  */
 
@@ -16,14 +16,14 @@ export enum JobStatus {
   COMPLETED = 'completed',
   FAILED = 'failed',
   CANCELLED = 'cancelled',
-  RETRYING = 'retrying'
+  RETRYING = 'retrying',
 }
 
 export enum JobPriority {
-  URGENT = 1,   // < 10MB files
-  HIGH = 2,     // Important content
-  NORMAL = 3,   // Regular processing
-  LOW = 4       // Large files > 100MB
+  URGENT = 1, // < 10MB files
+  HIGH = 2, // Important content
+  NORMAL = 3, // Regular processing
+  LOW = 4, // Large files > 100MB
 }
 
 export interface TranscriptionJob {
@@ -213,12 +213,14 @@ export interface MonitoringConfig {
 export const JobCreateSchema = z.object({
   filePath: z.string().min(1),
   priority: z.nativeEnum(JobPriority).optional(),
-  metadata: z.object({
-    originalPath: z.string().optional(),
-    audioFormat: z.string().optional(),
-    whisperModel: z.string().optional(),
-    language: z.string().optional(),
-  }).optional(),
+  metadata: z
+    .object({
+      originalPath: z.string().optional(),
+      audioFormat: z.string().optional(),
+      whisperModel: z.string().optional(),
+      language: z.string().optional(),
+    })
+    .optional(),
 });
 
 export const JobUpdateSchema = z.object({

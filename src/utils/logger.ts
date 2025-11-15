@@ -1,6 +1,6 @@
 /**
  * 🔮 Transcription Palantir - Logging Utility
- * 
+ *
  * Structured logging with Pino for development and production
  */
 
@@ -14,7 +14,7 @@ import { appConfig } from '../config/index.js';
 const loggerConfig: pino.LoggerOptions = {
   level: appConfig.logLevel,
   name: appConfig.serviceName,
-  
+
   // Development-friendly formatting
   ...(appConfig.env === 'development' && {
     transport: {
@@ -113,7 +113,9 @@ export function logJobError(context: LogContext & { error: Error }): void {
   );
 }
 
-export function logApiRequest(context: LogContext & { method: string; url: string; statusCode: number }): void {
+export function logApiRequest(
+  context: LogContext & { method: string; url: string; statusCode: number }
+): void {
   apiLogger.info(
     {
       requestId: context.requestId,
@@ -207,7 +209,7 @@ export function logFatalError(error: Error, context: LogContext = {}): void {
 
 export function createTimer(label: string, context: LogContext = {}) {
   const start = Date.now();
-  
+
   return {
     end: (additionalContext: LogContext = {}) => {
       const duration = Date.now() - start;
