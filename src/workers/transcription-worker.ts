@@ -238,7 +238,7 @@ export class TranscriptionWorker {
 
       // For now, we'll simulate transcription since Whisper.cpp might not be installed yet
       // TODO: Replace with actual Whisper.cpp execution
-      const useSimulation = true;
+      const useSimulation = appConfig.env !== 'production';
 
       if (useSimulation) {
         // Simulate transcription process
