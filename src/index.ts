@@ -1,6 +1,6 @@
 /**
  * 🔮 Transcription Palantir - Main Application Entry Point
- * 
+ *
  * Modern TypeScript transcription system with BullMQ, Redis, and Whisper.cpp
  */
 
@@ -42,7 +42,7 @@ class TranscriptionPalantir {
       await this.startComponents();
 
       logger.info('🚀 Transcription Palantir started successfully');
-      
+
       // Log configuration summary
       this.logConfigurationSummary();
 
@@ -61,7 +61,7 @@ class TranscriptionPalantir {
     try {
       // Stop components in reverse order
       await this.stopComponents();
-      
+
       // Close services
       await this.closeServices();
 

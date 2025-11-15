@@ -12,6 +12,7 @@ import { constants } from 'fs';
 import { join, dirname, basename, extname } from 'path';
 import { appConfig, getRedisUrl, getWhisperCommand } from '../config/index.js';
 import { logger } from '../utils/logger.js';
+import { whisperService } from '../services/whisper.js';
 import type { TranscriptionJob } from '../types/index.js';
 
 // =============================================================================
@@ -244,58 +245,56 @@ export class TranscriptionWorker {
     outputPath: string,
     onProgress: (progress: number) => Promise<void>
   ): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const outputDir = dirname(outputPath);
-      const outputBaseName = basename(outputPath, extname(outputPath));
+    const outputDir = dirname(outputPath);
 
-      // Get Whisper command
-      const command = getWhisperCommand(inputPath, join(outputDir, outputBaseName));
+    // Check if Whisper.cpp is available
+    const binaryExists = await whisperService.validateBinary();
 
-      logger.debug({ command }, 'Running Whisper command');
+    if (!binaryExists) {
+      // Fall back to simulation if Whisper.cpp is not installed
+      logger.warn('Whisper.cpp not found, using simulation mode');
+      return await this.simulateTranscription(inputPath, outputPath, onProgress);
+    }
 
-      // For now, we'll simulate transcription since Whisper.cpp might not be installed yet
-      // TODO: Replace with actual Whisper.cpp execution
-      const useSimulation = appConfig.env !== 'production';
+    try {
+      // Use real Whisper.cpp transcription
+      logger.info({ inputPath, outputDir }, 'Running Whisper.cpp transcription');
 
-      if (useSimulation) {
-        // Simulate transcription process
-        this.simulateTranscription(inputPath, outputPath, onProgress).then(resolve).catch(reject);
-        return;
+      // Build Whisper options
+      const whisperOptions: any = {
+        model: appConfig.whisper.model,
+        task: appConfig.whisper.task as 'transcribe' | 'translate',
+        outputFormat: 'txt',
+      };
+
+      // Only add language if not auto-detection
+      if (appConfig.whisper.language && appConfig.whisper.language !== 'auto') {
+        whisperOptions.language = appConfig.whisper.language;
       }
 
-      // If not using simulation, reject since Whisper is not configured
-      reject(
-        new Error('Whisper.cpp is not configured. Set useSimulation to true or configure Whisper.')
+      const result = await whisperService.transcribe(
+        inputPath,
+        outputDir,
+        whisperOptions,
+        (progress) => {
+          // Update job progress
+          onProgress(progress.progress).catch((err) => {
+            logger.warn({ error: err }, 'Failed to update progress');
+          });
+        }
       );
 
-      // Real Whisper.cpp execution (uncomment when Whisper is installed)
-      /*
-      const whisperProcess = spawn(command[0], command.slice(1), {
-        cwd: outputDir,
-      });
+      // The transcription result is in the output directory
+      const transcriptPath = `${outputPath}.txt`;
 
-      let stderr = '';
+      logger.info({ transcriptPath }, 'Whisper.cpp transcription completed');
 
-      whisperProcess.stderr.on('data', (data) => {
-        stderr += data.toString();
-        // Parse progress from stderr if available
-        // Update progress based on Whisper output
-      });
+      return transcriptPath;
 
-      whisperProcess.on('close', (code) => {
-        if (code === 0) {
-          const transcriptPath = `${outputPath}.txt`;
-          resolve(transcriptPath);
-        } else {
-          reject(new Error(`Whisper process exited with code ${code}: ${stderr}`));
-        }
-      });
-
-      whisperProcess.on('error', (error) => {
-        reject(new Error(`Failed to start Whisper: ${error.message}`));
-      });
-      */
-    });
+    } catch (error) {
+      logger.error({ error, inputPath }, 'Whisper.cpp transcription failed');
+      throw error; // Re-throw the error to fail the job properly
+    }
   }
 
   // ===========================================================================
