@@ -318,8 +318,7 @@ To enable real transcription:
 [END OF SIMULATED TRANSCRIPT]
 `;
 
-    const fs = await import('fs/promises');
-    await fs.writeFile(transcriptPath, mockTranscript, 'utf-8');
+    await writeFile(transcriptPath, mockTranscript, 'utf-8');
 
     return transcriptPath;
   }
