@@ -16,6 +16,9 @@ import { appConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { healthRoutes } from './routes/health.js';
 import { jobRoutes } from './routes/jobs.js';
+import { metricsRoutes } from './routes/metrics.js';
+import { monitorRoutes } from './routes/monitor.js';
+import { websocketRoutes } from './routes/websocket.js';
 import { errorHandler } from './middleware/error.js';
 import { requestLogger } from './middleware/logger.js';
 
@@ -133,8 +136,9 @@ export class ApiServer {
         tags: [
           { name: 'health', description: 'Health check endpoints' },
           { name: 'jobs', description: 'Job management endpoints' },
-          { name: 'queue', description: 'Queue monitoring endpoints' },
-          { name: 'workers', description: 'Worker management endpoints' },
+          { name: 'metrics', description: 'Prometheus metrics endpoints' },
+          { name: 'monitoring', description: 'Queue and worker monitoring' },
+          { name: 'websocket', description: 'Real-time updates via WebSocket' },
         ],
         components: {
           securitySchemes: {
@@ -202,11 +206,14 @@ export class ApiServer {
     // Job management routes
     fastify.register(jobRoutes, { prefix });
 
-    // TODO: Add more route groups
-    // - Queue monitoring routes
-    // - Worker management routes
-    // - Metrics routes
-    // - WebSocket routes for real-time updates
+    // Metrics routes (Prometheus)
+    fastify.register(metricsRoutes, { prefix });
+
+    // Monitoring dashboard routes
+    fastify.register(monitorRoutes, { prefix });
+
+    // WebSocket routes for real-time updates
+    fastify.register(websocketRoutes, { prefix });
   }
 
   // ===========================================================================

@@ -179,8 +179,8 @@ export async function jobRoutes(
       const start = (validated.page - 1) * validated.limit;
       const end = start + validated.limit - 1;
       jobs = await transcriptionQueue.getJobs(status, start, end);
-      // TODO: Get total count for pagination
-      total = await transcriptionQueue.queueInstance.getJobCountByTypes(status);
+      // Get total count for pagination
+      total = await transcriptionQueue.queueInstance.count();
     } else {
       // Get all jobs (combined from all statuses)
       const stats = await transcriptionQueue.getQueueStats();
