@@ -180,7 +180,18 @@ export async function jobRoutes(
       const end = start + validated.limit - 1;
       jobs = await transcriptionQueue.getJobs(status, start, end);
       // TODO: Get total count for pagination
-      total = await transcriptionQueue.queueInstance.getJobCountByTypes(status);
+      // Map JobStatus to BullMQ job types
+      const statusMap = {
+        [JobStatus.PENDING]: 'waiting',
+        [JobStatus.PROCESSING]: 'active',
+        [JobStatus.COMPLETED]: 'completed',
+        [JobStatus.FAILED]: 'failed',
+        [JobStatus.CANCELLED]: 'failed',
+        [JobStatus.RETRYING]: 'waiting',
+      } as const;
+
+      const bullStatus = statusMap[status];
+      total = await transcriptionQueue.queueInstance.getJobCountByTypes(bullStatus);
     } else {
       // Get all jobs (combined from all statuses)
       const stats = await transcriptionQueue.getQueueStats();

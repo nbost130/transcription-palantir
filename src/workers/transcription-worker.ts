@@ -7,7 +7,7 @@
 import { Worker, Job } from 'bullmq';
 import { Redis } from 'ioredis';
 import { spawn } from 'child_process';
-import { mkdir, access, rename, copyFile } from 'fs/promises';
+import { mkdir, access, rename, copyFile, writeFile } from 'fs/promises';
 import { constants } from 'fs';
 import { join, dirname, basename, extname } from 'path';
 import { appConfig, getRedisUrl, getWhisperCommand } from '../config/index.js';
