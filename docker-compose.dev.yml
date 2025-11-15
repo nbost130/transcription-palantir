@@ -1,0 +1,115 @@
+version: '3.8'
+
+# =============================================================================
+# DEVELOPMENT DOCKER COMPOSE
+# =============================================================================
+# This compose file is optimized for local development with:
+# - Hot reload support
+# - Exposed debugging ports
+# - Simplified configuration
+# - Local volume mounts
+# - Development logging
+#
+# Usage:
+#   docker-compose -f docker-compose.dev.yml up
+#   docker-compose -f docker-compose.dev.yml down
+# =============================================================================
+
+services:
+  # =============================================================================
+  # REDIS SERVICE (Development)
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: palantir-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+      - ./config/redis-dev.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - palantir-dev-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # =============================================================================
+  # REDIS COMMANDER (Web UI for Redis)
+  # =============================================================================
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: palantir-redis-ui
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - palantir-dev-network
+
+  # =============================================================================
+  # DEVELOPMENT APPLICATION
+  # =============================================================================
+  # Note: For development, run the app directly on host with:
+  #   bun run dev
+  # This allows for faster hot-reload and easier debugging.
+  # Uncomment below if you want to run in Docker:
+
+  # app-dev:
+  #   build:
+  #     context: .
+  #     dockerfile: docker/Dockerfile.dev
+  #   container_name: palantir-app-dev
+  #   ports:
+  #     - "3000:3000"
+  #     - "9229:9229"  # Node.js debugger
+  #   environment:
+  #     - NODE_ENV=development
+  #     - REDIS_HOST=redis
+  #     - REDIS_PORT=6379
+  #     - LOG_LEVEL=debug
+  #   volumes:
+  #     - ./src:/app/src:delegated
+  #     - ./config:/app/config:delegated
+  #     - /tmp/audio-input:/tmp/audio-input
+  #     - /tmp/transcripts:/tmp/transcripts
+  #   depends_on:
+  #     redis:
+  #       condition: service_healthy
+  #   networks:
+  #     - palantir-dev-network
+  #   command: bun run --watch src/index.ts
+
+# =============================================================================
+# VOLUMES (Development)
+# =============================================================================
+volumes:
+  redis_dev_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/.docker/redis-data
+
+# =============================================================================
+# NETWORKS (Development)
+# =============================================================================
+networks:
+  palantir-dev-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
