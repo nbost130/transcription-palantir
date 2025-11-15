@@ -102,7 +102,7 @@ volumes:
     driver_opts:
       type: none
       o: bind
-      device: ${PWD}/.docker/redis-data
+      device: ./.docker/redis-data
 
 # =============================================================================
 # NETWORKS (Development)

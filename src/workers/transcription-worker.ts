@@ -293,10 +293,7 @@ export class TranscriptionWorker {
 
     } catch (error) {
       logger.error({ error, inputPath }, 'Whisper.cpp transcription failed');
-
-      // Fall back to simulation on error
-      logger.warn('Falling back to simulation mode due to Whisper error');
-      return await this.simulateTranscription(inputPath, outputPath, onProgress);
+      throw error; // Re-throw the error to fail the job properly
     }
   }
 

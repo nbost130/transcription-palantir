@@ -7,6 +7,7 @@
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { transcriptionQueue } from '../../services/queue.js';
 import { JobStatus, type ApiResponse } from '../../types/index.js';
+import { appConfig } from '../../config/index.js';
 
 // =============================================================================
 // MONITORING ROUTES
@@ -120,12 +121,12 @@ export async function monitorRoutes(
       data: {
         workers: {
           configured: {
-            min: 1, // From config
-            max: 4, // From config
+            min: appConfig.processing.minWorkers, // From config
+            max: appConfig.processing.maxWorkers, // From config
           },
           active: stats.active,
-          idle: Math.max(0, 4 - stats.active), // Estimated
-          utilization: stats.active > 0 ? (stats.active / 4) * 100 : 0,
+          idle: Math.max(0, appConfig.processing.maxWorkers - stats.active), // Estimated
+          utilization: stats.active > 0 ? (stats.active / appConfig.processing.maxWorkers) * 100 : 0,
         },
         performance: {
           jobsInProgress: stats.active,
@@ -185,7 +186,7 @@ export async function monitorRoutes(
         },
         workers: {
           active: stats.active,
-          maxConcurrency: 4,
+          maxConcurrency: appConfig.processing.maxWorkers,
         },
         system: {
           memoryUsageMB: Math.round(memUsage.heapUsed / 1024 / 1024),

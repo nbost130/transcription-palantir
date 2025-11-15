@@ -43,7 +43,12 @@ test: ## Run tests
 
 test-integration: dev-up ## Run integration tests with Redis
 	@echo "$(BLUE)🧪 Running integration tests...$(NC)"
-	@sleep 3
+	@echo "$(YELLOW)Waiting for Redis to be ready...$(NC)"
+	@until docker exec palantir-redis-dev redis-cli ping > /dev/null 2>&1; do \
+		echo "$(YELLOW)Redis not ready, waiting...$(NC)"; \
+		sleep 1; \
+	done
+	@echo "$(GREEN)Redis is ready!$(NC)"
 	@bun test tests/integration
 
 clean: ## Clean build artifacts and Docker volumes
