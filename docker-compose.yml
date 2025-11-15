@@ -1,0 +1,166 @@
+version: '3.8'
+
+services:
+  # =============================================================================
+  # REDIS SERVICE
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: palantir-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - palantir-network
+
+  # =============================================================================
+  # TRANSCRIPTION API SERVICE
+  # =============================================================================
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+    container_name: palantir-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=info
+    volumes:
+      - ./config:/app/config:ro
+      - audio_input:/app/audio-input
+      - transcripts:/app/transcripts
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - palantir-network
+
+  # =============================================================================
+  # TRANSCRIPTION WORKER SERVICE
+  # =============================================================================
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+    container_name: palantir-worker
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=info
+      - MAX_WORKERS=2
+    volumes:
+      - ./config:/app/config:ro
+      - audio_input:/app/audio-input
+      - transcripts:/app/transcripts
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      replicas: 2
+    networks:
+      - palantir-network
+
+  # =============================================================================
+  # FILE WATCHER SERVICE
+  # =============================================================================
+  watcher:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+    container_name: palantir-watcher
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOG_LEVEL=info
+    volumes:
+      - ./config:/app/config:ro
+      - audio_input:/app/audio-input
+      - transcripts:/app/transcripts
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - palantir-network
+
+  # =============================================================================
+  # MONITORING SERVICES
+  # =============================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: palantir-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - palantir-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: palantir-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    networks:
+      - palantir-network
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+volumes:
+  redis_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  audio_input:
+    driver: local
+  transcripts:
+    driver: local
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  palantir-network:
+    driver: bridge
