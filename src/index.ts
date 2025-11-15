@@ -7,6 +7,7 @@
 import { logger, logFatalError } from './utils/logger.js';
 import { appConfig } from './config/index.js';
 import { transcriptionQueue } from './services/queue.js';
+import { apiServer } from './api/server.js';
 
 // =============================================================================
 // APPLICATION CLASS
@@ -79,12 +80,14 @@ class TranscriptionPalantir {
     await transcriptionQueue.initialize();
     logger.info('✅ Queue service initialized');
 
+    // Initialize API server
+    await apiServer.initialize();
+    logger.info('✅ API server initialized');
+
     // TODO: Initialize other services
     // - File watcher service
-    // - API server
     // - Worker manager
     // - Health check service
-    // - Metrics service
   }
 
   private async closeServices(): Promise<void> {
@@ -94,7 +97,8 @@ class TranscriptionPalantir {
     await transcriptionQueue.close();
     logger.info('✅ Queue service closed');
 
-    // TODO: Close other services
+    // Close API server (already stopped in stopComponents)
+    // No additional cleanup needed
   }
 
   // ===========================================================================
@@ -104,11 +108,13 @@ class TranscriptionPalantir {
   private async startComponents(): Promise<void> {
     logger.info('Starting application components...');
 
-    // TODO: Start components
-    // - API server
+    // Start API server
+    await apiServer.start();
+    logger.info('✅ API server started');
+
+    // TODO: Start other components
     // - File watcher
     // - Worker processes
-    // - Health monitoring
     // - Metrics collection
 
     logger.info('✅ All components started');
@@ -117,8 +123,14 @@ class TranscriptionPalantir {
   private async stopComponents(): Promise<void> {
     logger.info('Stopping application components...');
 
-    // TODO: Stop components gracefully
-    
+    // Stop API server
+    await apiServer.stop();
+    logger.info('✅ API server stopped');
+
+    // TODO: Stop other components gracefully
+    // - File watcher
+    // - Worker processes
+
     logger.info('✅ All components stopped');
   }
 
