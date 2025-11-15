@@ -17,7 +17,7 @@ config();
 
 const EnvSchema = z.object({
   // Core Settings
-  NODE_ENV: z.enum(['development', 'staging', 'production']).default('development'),
+  NODE_ENV: z.enum(['development', 'staging', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(3000),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
   SERVICE_NAME: z.string().default('transcription-palantir'),

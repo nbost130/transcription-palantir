@@ -164,7 +164,7 @@ export interface AppConfig {
 export interface RedisConfig {
   host: string;
   port: number;
-  password?: string;
+  password?: string | undefined;
   db: number;
   maxRetries: number;
   retryDelay: number;
@@ -197,8 +197,8 @@ export interface ApiConfig {
   corsOrigin: string;
   rateLimitMax: number;
   rateLimitWindow: number;
-  apiKey?: string;
-  jwtSecret?: string;
+  apiKey?: string | undefined;
+  jwtSecret?: string | undefined;
 }
 
 export interface MonitoringConfig {

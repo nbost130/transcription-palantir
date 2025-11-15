@@ -65,12 +65,12 @@ export const transcriptionLogger = logger.child({ component: 'transcription' });
 // =============================================================================
 
 export interface LogContext {
-  jobId?: string;
-  workerId?: string;
-  fileName?: string;
-  requestId?: string;
-  userId?: string;
-  duration?: number;
+  jobId?: string | undefined;
+  workerId?: string | undefined;
+  fileName?: string | undefined;
+  requestId?: string | undefined;
+  userId?: string | undefined;
+  duration?: number | undefined;
   [key: string]: any;
 }
 

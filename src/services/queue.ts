@@ -8,7 +8,7 @@ import { Queue, Worker, Job, QueueEvents } from 'bullmq';
 import { Redis } from 'ioredis';
 import { appConfig, getRedisUrl } from '../config/index.js';
 import { queueLogger, logQueueEvent } from '../utils/logger.js';
-import type { TranscriptionJob, JobStatus, JobPriority } from '../types/index.js';
+import { JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js';
 
 // =============================================================================
 // REDIS CONNECTION
@@ -16,7 +16,6 @@ import type { TranscriptionJob, JobStatus, JobPriority } from '../types/index.js
 
 const redisConnection = new Redis(getRedisUrl(), {
   maxRetriesPerRequest: appConfig.redis.maxRetries,
-  retryDelayOnFailover: appConfig.redis.retryDelay,
   lazyConnect: true,
 });
 
@@ -103,15 +102,15 @@ export class TranscriptionQueue {
       jobData,
       {
         priority: jobData.priority || JobPriority.NORMAL,
-        jobId: jobData.id,
+        ...(jobData.id && { jobId: jobData.id }),
         delay: this.calculateDelay(jobData.priority),
       }
     );
 
     logQueueEvent('job_added', {
-      jobId: job.id,
-      fileName: jobData.fileName,
-      priority: jobData.priority,
+      jobId: job.id || undefined,
+      fileName: jobData.fileName || undefined,
+      priority: jobData.priority || undefined,
     });
 
     return job;
