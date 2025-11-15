@@ -260,39 +260,6 @@ export class TranscriptionWorker {
       // Use real Whisper.cpp transcription
       logger.info({ inputPath, outputDir }, 'Running Whisper.cpp transcription');
 
-<<<<<<< HEAD
-      if (useSimulation) {
-        // Simulate transcription process
-        this.simulateTranscription(inputPath, outputPath, onProgress).then(resolve).catch(reject);
-        return;
-      }
-
-      // If not using simulation, reject since Whisper is not configured
-      reject(
-        new Error('Whisper.cpp is not configured. Set useSimulation to true or configure Whisper.')
-      );
-
-      // Real Whisper.cpp execution (uncomment when Whisper is installed)
-      /*
-      const whisperProcess = spawn(command[0], command.slice(1), {
-        cwd: outputDir,
-      });
-
-      let stderr = '';
-
-      whisperProcess.stderr.on('data', (data) => {
-        stderr += data.toString();
-        // Parse progress from stderr if available
-        // Update progress based on Whisper output
-      });
-
-      whisperProcess.on('close', (code) => {
-        if (code === 0) {
-          const transcriptPath = `${outputPath}.txt`;
-          resolve(transcriptPath);
-        } else {
-          reject(new Error(`Whisper process exited with code ${code}: ${stderr}`));
-=======
       // Build Whisper options
       const whisperOptions: any = {
         model: appConfig.whisper.model,
@@ -314,7 +281,6 @@ export class TranscriptionWorker {
           onProgress(progress.progress).catch((err) => {
             logger.warn({ error: err }, 'Failed to update progress');
           });
->>>>>>> origin/claude/whisper-integration-01RfoXsYAs8VawdoRnr8ay4q
         }
       );
 
