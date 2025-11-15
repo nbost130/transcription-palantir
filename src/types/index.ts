@@ -175,6 +175,7 @@ export interface WhisperConfig {
   computeType: string;
   language: string;
   task: string;
+  usePython: boolean;
 }
 
 export interface ProcessingConfig {

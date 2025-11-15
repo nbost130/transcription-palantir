@@ -36,6 +36,7 @@ const EnvSchema = z.object({
   COMPUTE_TYPE: z.string().default('int8'),
   WHISPER_LANGUAGE: z.string().default('auto'),
   WHISPER_TASK: z.string().default('transcribe'),
+  WHISPER_USE_PYTHON: z.coerce.boolean().default(true),
 
   // File Processing
   WATCH_DIRECTORY: z.string().default('/tmp/audio-input'),
@@ -94,6 +95,7 @@ function createConfig(): AppConfig {
       computeType: env.COMPUTE_TYPE,
       language: env.WHISPER_LANGUAGE,
       task: env.WHISPER_TASK,
+      usePython: env.WHISPER_USE_PYTHON,
     },
 
     processing: {
@@ -177,23 +179,43 @@ export function getRedisUrl(): string {
   return `redis://${auth}${host}:${port}/${db}`;
 }
 
-export function getWhisperCommand(inputFile: string, outputFile: string): string[] {
-  const { binaryPath, model, computeType, language, task } = appConfig.whisper;
+export function getWhisperCommand(inputFile: string, outputDir: string): string[] {
+  const { binaryPath, model, computeType, language, task, usePython } = appConfig.whisper;
 
-  return [
-    binaryPath,
-    '--model',
-    model,
-    '--compute_type',
-    computeType,
-    '--language',
-    language,
-    '--task',
-    task,
-    '--output_format',
-    'txt',
-    '--output_file',
-    outputFile,
-    inputFile,
-  ];
+  if (usePython) {
+    // Python Whisper command
+    const args = [
+      binaryPath,
+      inputFile,
+      '--model', model,
+      '--output_format', 'txt',
+      '--output_dir', outputDir,
+      '--task', task,
+    ];
+
+    // Only add language if not auto-detection
+    if (language && language !== 'auto') {
+      args.push('--language', language);
+    }
+
+    return args;
+  } else {
+    // Whisper.cpp command (original)
+    return [
+      binaryPath,
+      '--model',
+      model,
+      '--compute_type',
+      computeType,
+      '--language',
+      language,
+      '--task',
+      task,
+      '--output_format',
+      'txt',
+      '--output_dir',
+      outputDir,
+      inputFile,
+    ];
+  }
 }

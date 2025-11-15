@@ -260,32 +260,44 @@ export class TranscriptionWorker {
       // Use real Whisper.cpp transcription
       logger.info({ inputPath, outputDir }, 'Running Whisper.cpp transcription');
 
-      // Build Whisper options
-      const whisperOptions: any = {
-        model: appConfig.whisper.model,
-        task: appConfig.whisper.task as 'transcribe' | 'translate',
-        outputFormat: 'txt',
-      };
+      // Use direct Whisper command for simplicity
+      const command = getWhisperCommand(inputPath, outputDir);
+      logger.info({ command }, 'Executing Whisper command');
 
-      // Only add language if not auto-detection
-      if (appConfig.whisper.language && appConfig.whisper.language !== 'auto') {
-        whisperOptions.language = appConfig.whisper.language;
-      }
+      // Execute Whisper command
+      const whisperProcess = spawn(command[0]!, command.slice(1), {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
 
-      const result = await whisperService.transcribe(
-        inputPath,
-        outputDir,
-        whisperOptions,
-        (progress) => {
-          // Update job progress
-          onProgress(progress.progress).catch((err) => {
-            logger.warn({ error: err }, 'Failed to update progress');
-          });
-        }
-      );
+      let stderr = '';
+      let stdout = '';
 
-      // The transcription result is in the output directory
-      const transcriptPath = `${outputPath}.txt`;
+      whisperProcess.stdout.on('data', (data: any) => {
+        stdout += data.toString();
+        // Update progress based on output if possible
+        onProgress(50).catch(() => {}); // Simple progress update
+      });
+
+      whisperProcess.stderr.on('data', (data: any) => {
+        stderr += data.toString();
+      });
+
+      const transcriptPath = await new Promise<string>((resolve, reject) => {
+        whisperProcess.on('close', (code: number | null) => {
+          if (code === 0) {
+            // Python Whisper creates files like: inputname.txt
+            const inputBasename = basename(inputPath, extname(inputPath));
+            const transcriptFile = join(outputDir, `${inputBasename}.txt`);
+            resolve(transcriptFile);
+          } else {
+            reject(new Error(`Whisper process exited with code ${code}: ${stderr}`));
+          }
+        });
+
+        whisperProcess.on('error', (error: Error) => {
+          reject(new Error(`Failed to start Whisper process: ${error.message}`));
+        });
+      });
 
       logger.info({ transcriptPath }, 'Whisper.cpp transcription completed');
 

@@ -1,0 +1,2 @@
+The system uses TypeScript, full MQ for job Qing, Redis for Data Storage, and Whisper
+for Speech Recognition.

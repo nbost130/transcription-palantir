@@ -65,16 +65,16 @@ describe('Configuration', () => {
   describe('getWhisperCommand', () => {
     it('should generate correct Whisper command', () => {
       const inputFile = '/path/to/input.wav';
-      const outputFile = '/path/to/output.txt';
-      
-      const command = getWhisperCommand(inputFile, outputFile);
-      
+      const outputDir = '/path/to/output';
+
+      const command = getWhisperCommand(inputFile, outputDir);
+
       expect(command).toBeArray();
       expect(command[0]).toBe(appConfig.whisper.binaryPath);
       expect(command).toContain('--model');
       expect(command).toContain(appConfig.whisper.model);
-      expect(command).toContain('--output_file');
-      expect(command).toContain(outputFile);
+      expect(command).toContain('--output_dir');
+      expect(command).toContain(outputDir);
       expect(command).toContain(inputFile);
     });
   });

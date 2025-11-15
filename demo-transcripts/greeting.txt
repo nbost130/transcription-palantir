@@ -1,0 +1,2 @@
+Hello and welcome to the Transcription Palantir System.
+This is a demonstration of our audio transcription capabilities.
