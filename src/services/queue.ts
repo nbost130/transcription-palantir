@@ -15,8 +15,8 @@ import { JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js
 // =============================================================================
 
 const redisConnection = new Redis(getRedisUrl(), {
-  maxRetriesPerRequest: appConfig.redis.maxRetries,
-  lazyConnect: true,
+  maxRetriesPerRequest: null, // Required for BullMQ
+  lazyConnect: false, // Connect immediately
 });
 
 // =============================================================================
@@ -60,7 +60,6 @@ export class TranscriptionQueue {
     if (this.isInitialized) return;
 
     try {
-      await redisConnection.connect();
       await this.queue.waitUntilReady();
       await this.queueEvents.waitUntilReady();
 

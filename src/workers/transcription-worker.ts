@@ -20,8 +20,8 @@ import type { TranscriptionJob } from '../types/index.js';
 // =============================================================================
 
 const redisConnection = new Redis(getRedisUrl(), {
-  maxRetriesPerRequest: appConfig.redis.maxRetries,
-  lazyConnect: true,
+  maxRetriesPerRequest: null, // Required for BullMQ
+  lazyConnect: false, // Connect immediately
 });
 
 // =============================================================================
@@ -45,7 +45,7 @@ export class TranscriptionWorker {
     }
 
     try {
-      await redisConnection.connect();
+      // Redis connection is handled automatically by BullMQ
 
       this.worker = new Worker('transcription', async (job: Job) => await this.processJob(job), {
         connection: redisConnection,
