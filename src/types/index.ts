@@ -172,6 +172,7 @@ export interface RedisConfig {
 export interface WhisperConfig {
   model: string;
   binaryPath: string;
+  pythonPath: string;
   computeType: string;
   language: string;
   task: string;

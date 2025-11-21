@@ -21,6 +21,14 @@ export interface WhisperOptions {
   task?: 'transcribe' | 'translate';
   outputFormat?: 'txt' | 'json' | 'srt' | 'vtt';
   threads?: number;
+  processors?: number;
+  beamSize?: number;
+  temperature?: number;
+  vadEnabled?: boolean;
+  vadThreshold?: number;
+  vadMinSpeechDuration?: number;
+  vadMinSilenceDuration?: number;
+  flashAttention?: boolean;
   verbose?: boolean;
 }
 
@@ -80,7 +88,11 @@ export class WhisperService {
    * Check if a specific model exists
    */
   async validateModel(modelName: string): Promise<boolean> {
-    const modelPath = join(this.modelsPath, `ggml-${modelName}.bin`);
+    // Handle both full path and model name
+    const modelPath = modelName.includes('/')
+      ? modelName  // Full path provided
+      : join(this.modelsPath, `ggml-${modelName}.bin`);  // Just model name
+
     try {
       await access(modelPath, constants.R_OK);
       logger.debug({ model: modelName, path: modelPath }, 'Whisper model found');
@@ -191,8 +203,13 @@ export class WhisperService {
     const task = options.task || appConfig.whisper.task;
     const outputFormat = options.outputFormat || 'txt';
 
+    // Handle both full path and model name
+    const modelPath = model.includes('/')
+      ? model  // Full path provided
+      : join(this.modelsPath, `ggml-${model}.bin`);  // Just model name
+
     const args = [
-      '-m', join(this.modelsPath, `ggml-${model}.bin`),
+      '-m', modelPath,
       '-f', inputFile,
     ];
 
@@ -206,15 +223,59 @@ export class WhisperService {
       args.push('--translate');
     }
 
-    // Output format
-    args.push('-o' + outputFormat);
+    // Output format (use proper flags like --output-txt)
+    if (outputFormat === 'txt') {
+      args.push('--output-txt');
+    } else if (outputFormat === 'json') {
+      args.push('--output-json');
+    } else if (outputFormat === 'srt') {
+      args.push('--output-srt');
+    } else if (outputFormat === 'vtt') {
+      args.push('--output-vtt');
+    }
 
-    // Output directory
-    args.push('-of', join(outputDir, baseName));
+    // Output file path (without extension)
+    args.push('--output-file', join(outputDir, baseName));
 
-    // Threading
-    if (options.threads) {
-      args.push('-t', options.threads.toString());
+    // Threading - use all available cores by default
+    const threads = options.threads || 8; // Default to 8 cores for your hardware
+    args.push('-t', threads.toString());
+
+    // Processors
+    if (options.processors) {
+      args.push('-p', options.processors.toString());
+    }
+
+    // Beam size for speed/accuracy trade-off
+    if (options.beamSize !== undefined) {
+      args.push('-bs', options.beamSize.toString());
+    }
+
+    // Temperature for sampling
+    if (options.temperature !== undefined) {
+      args.push('-tp', options.temperature.toString());
+    }
+
+    // Voice Activity Detection
+    if (options.vadEnabled) {
+      args.push('--vad');
+
+      if (options.vadThreshold !== undefined) {
+        args.push('-vt', options.vadThreshold.toString());
+      }
+
+      if (options.vadMinSpeechDuration !== undefined) {
+        args.push('-vspd', options.vadMinSpeechDuration.toString());
+      }
+
+      if (options.vadMinSilenceDuration !== undefined) {
+        args.push('-vsd', options.vadMinSilenceDuration.toString());
+      }
+    }
+
+    // Flash attention (enabled by default, can disable)
+    if (options.flashAttention === false) {
+      args.push('-nfa');
     }
 
     // Verbose output

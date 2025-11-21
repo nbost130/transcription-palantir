@@ -13,6 +13,7 @@ import { join, dirname, basename, extname } from 'path';
 import { appConfig, getRedisUrl, getWhisperCommand } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { whisperService } from '../services/whisper.js';
+import { fasterWhisperService } from '../services/faster-whisper.js';
 import type { TranscriptionJob } from '../types/index.js';
 
 // =============================================================================
@@ -46,8 +47,13 @@ export class TranscriptionWorker {
 
     try {
       // Redis connection is handled automatically by BullMQ
+      logger.info('🔵 DEBUG: About to create Worker instance');
+      logger.info({ queueName: 'transcription', concurrency: appConfig.processing.maxWorkers }, '🔵 DEBUG: Worker config');
 
-      this.worker = new Worker('transcription', async (job: Job) => await this.processJob(job), {
+      this.worker = new Worker('transcription', async (job: Job) => {
+        logger.info({ jobId: job.id }, '🔵 DEBUG: PROCESSOR CALLBACK INVOKED!!!');
+        return await this.processJob(job);
+      }, {
         connection: redisConnection,
         concurrency: appConfig.processing.maxWorkers,
         limiter: {
@@ -55,6 +61,8 @@ export class TranscriptionWorker {
           duration: 1000,
         },
       });
+
+      logger.info('🔵 DEBUG: Worker instance created');
 
       // Setup event listeners
       this.setupEventListeners();
@@ -109,6 +117,8 @@ export class TranscriptionWorker {
   private setupEventListeners(): void {
     if (!this.worker) return;
 
+    logger.info('🔵 DEBUG: Setting up event listeners');
+
     this.worker.on('completed', (job: Job) => {
       this.processedJobs++;
       logger.info(
@@ -140,8 +150,9 @@ export class TranscriptionWorker {
           jobId: job.id,
           fileName: job.data.fileName,
         },
-        '▶️ Job started processing'
+        '▶️ Job started processing (EVENT LISTENER)'
       );
+      logger.info({ jobId: job.id }, '🔵 DEBUG: active event fired');
     });
 
     this.worker.on('stalled', (jobId: string) => {
@@ -158,6 +169,8 @@ export class TranscriptionWorker {
   // ===========================================================================
 
   private async processJob(job: Job): Promise<any> {
+    logger.info({ jobId: job.id }, '🟢 DEBUG: processJob ENTRY POINT');
+
     const jobData: TranscriptionJob = job.data;
     const startTime = Date.now();
 
@@ -257,49 +270,28 @@ export class TranscriptionWorker {
     }
 
     try {
-      // Use real Whisper.cpp transcription
-      logger.info({ inputPath, outputDir }, 'Running Whisper.cpp transcription');
+      // Use whisperService which has the correct command format
+      logger.info({ inputPath, outputDir }, 'Running Whisper.cpp transcription via whisperService');
 
-      // Use direct Whisper command for simplicity
-      const command = getWhisperCommand(inputPath, outputDir);
-      logger.info({ command }, 'Executing Whisper command');
+      const result = await fasterWhisperService.transcribe(
+        inputPath,
+        outputDir,
+        {
+          model: 'medium',
+          device: 'cpu',
+          computeType: 'int8',
+          beamSize: 5,
+          vadFilter: false,  // Disable VAD for now (can enable later)
+          wordTimestamps: false,
+        }
+      );
 
-      // Execute Whisper command
-      const whisperProcess = spawn(command[0]!, command.slice(1), {
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
+      logger.info({ transcriptPath: result.text }, 'Whisper.cpp transcription completed');
 
-      let stderr = '';
-      let stdout = '';
-
-      whisperProcess.stdout.on('data', (data: any) => {
-        stdout += data.toString();
-        // Update progress based on output if possible
-        onProgress(50).catch(() => {}); // Simple progress update
-      });
-
-      whisperProcess.stderr.on('data', (data: any) => {
-        stderr += data.toString();
-      });
-
-      const transcriptPath = await new Promise<string>((resolve, reject) => {
-        whisperProcess.on('close', (code: number | null) => {
-          if (code === 0) {
-            // Python Whisper creates files like: inputname.txt
-            const inputBasename = basename(inputPath, extname(inputPath));
-            const transcriptFile = join(outputDir, `${inputBasename}.txt`);
-            resolve(transcriptFile);
-          } else {
-            reject(new Error(`Whisper process exited with code ${code}: ${stderr}`));
-          }
-        });
-
-        whisperProcess.on('error', (error: Error) => {
-          reject(new Error(`Failed to start Whisper process: ${error.message}`));
-        });
-      });
-
-      logger.info({ transcriptPath }, 'Whisper.cpp transcription completed');
+      // whisperService returns the full result, we need the file path
+      // The transcript file will be: outputDir/basename.txt
+      const inputBasename = basename(inputPath, extname(inputPath));
+      const transcriptPath = join(outputDir, `${inputBasename}.txt`);
 
       return transcriptPath;
 

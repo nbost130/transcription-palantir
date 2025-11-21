@@ -168,6 +168,18 @@ export class TranscriptionQueue {
     return this.queue.getJobs([bullStatus], start, end);
   }
 
+  async getAllJobs(start = 0, end = 100) {
+    // Get jobs from all statuses
+    const [waiting, active, completed, failed] = await Promise.all([
+      this.queue.getJobs(['waiting'], start, end),
+      this.queue.getJobs(['active'], start, end),
+      this.queue.getJobs(['completed'], start, end),
+      this.queue.getJobs(['failed'], start, end),
+    ]);
+
+    return [...waiting, ...active, ...completed, ...failed];
+  }
+
   // ===========================================================================
   // QUEUE MANAGEMENT
   // ===========================================================================

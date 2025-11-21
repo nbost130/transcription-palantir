@@ -31,8 +31,9 @@ const EnvSchema = z.object({
   REDIS_RETRY_DELAY: z.coerce.number().default(1000),
 
   // Whisper Configuration
-  WHISPER_MODEL: z.string().default('small'),
+  WHISPER_MODEL: z.string().default('medium'),
   WHISPER_BINARY_PATH: z.string().default('/usr/local/bin/whisper'),
+  WHISPER_PYTHON_PATH: z.string().default('/tmp/whisper-env/bin/python3'),
   COMPUTE_TYPE: z.string().default('int8'),
   WHISPER_LANGUAGE: z.string().default('auto'),
   WHISPER_TASK: z.string().default('transcribe'),
@@ -92,6 +93,7 @@ function createConfig(): AppConfig {
     whisper: {
       model: env.WHISPER_MODEL,
       binaryPath: env.WHISPER_BINARY_PATH,
+      pythonPath: env.WHISPER_PYTHON_PATH,
       computeType: env.COMPUTE_TYPE,
       language: env.WHISPER_LANGUAGE,
       task: env.WHISPER_TASK,
