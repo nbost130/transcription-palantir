@@ -5,9 +5,9 @@
  */
 
 import chokidar from 'chokidar';
-import { stat, access } from 'fs/promises';
+import { stat, access, readdir } from 'fs/promises';
 import { constants } from 'fs';
-import { basename, extname } from 'path';
+import { basename, extname, join } from 'path';
 import { logger } from '../utils/logger.js';
 import { appConfig } from '../config/index.js';
 import { transcriptionQueue } from './queue.js';
@@ -62,6 +62,9 @@ export class FileWatcherService {
         },
         '👁️ File watcher started successfully'
       );
+
+      // Perform initial scan for existing files
+      await this.performInitialScan();
     } catch (error) {
       logger.error({ error }, 'Failed to start file watcher');
       throw error;
@@ -297,6 +300,67 @@ export class FileWatcherService {
       );
       throw error;
     }
+  }
+
+  // ===========================================================================
+  // INITIAL SCAN
+  // ===========================================================================
+
+  private async performInitialScan(): Promise<void> {
+    try {
+      logger.info('🔍 Performing initial scan for existing files...');
+      const foundFiles = await this.scanDirectoryRecursively(appConfig.processing.watchDirectory);
+
+      if (foundFiles.length > 0) {
+        logger.info({ count: foundFiles.length }, `Found ${foundFiles.length} existing audio files to process`);
+
+        // Process each found file
+        for (const filePath of foundFiles) {
+          await this.handleFileAdded(filePath);
+        }
+      } else {
+        logger.info('No existing audio files found in watch directory');
+      }
+    } catch (error) {
+      logger.error({ error }, 'Error during initial scan');
+    }
+  }
+
+  private async scanDirectoryRecursively(dirPath: string, maxDepth: number = 3, currentDepth: number = 0): Promise<string[]> {
+    const foundFiles: string[] = [];
+
+    if (currentDepth >= maxDepth) {
+      return foundFiles;
+    }
+
+    try {
+      const entries = await readdir(dirPath, { withFileTypes: true });
+
+      for (const entry of entries) {
+        const fullPath = join(dirPath, entry.name);
+
+        if (entry.isDirectory()) {
+          // Skip hidden directories
+          if (entry.name.startsWith('.')) {
+            continue;
+          }
+
+          // Recursively scan subdirectory
+          const subFiles = await this.scanDirectoryRecursively(fullPath, maxDepth, currentDepth + 1);
+          foundFiles.push(...subFiles);
+        } else if (entry.isFile()) {
+          // Check if it's a supported audio file
+          const extension = extname(entry.name).toLowerCase().slice(1);
+          if (appConfig.processing.supportedFormats.includes(extension)) {
+            foundFiles.push(fullPath);
+          }
+        }
+      }
+    } catch (error) {
+      logger.warn({ error, dirPath }, 'Error scanning directory');
+    }
+
+    return foundFiles;
   }
 
   // ===========================================================================
