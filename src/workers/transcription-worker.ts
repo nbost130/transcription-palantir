@@ -195,8 +195,8 @@ export class TranscriptionWorker {
       await this.ensureDirectories();
       await job.updateProgress(20);
 
-      // Generate output file path
-      const outputPath = this.generateOutputPath(jobData.fileName);
+      // Generate output file path (preserving directory structure)
+      const outputPath = this.generateOutputPath(jobData.filePath);
 
       // Run transcription
       await job.updateProgress(30);
@@ -260,6 +260,9 @@ export class TranscriptionWorker {
   ): Promise<string> {
     const outputDir = dirname(outputPath);
 
+    // Ensure output directory exists (including subdirectories)
+    await mkdir(outputDir, { recursive: true });
+
     // Check if Whisper.cpp is available
     const binaryExists = await whisperService.validateBinary();
 
@@ -279,7 +282,7 @@ export class TranscriptionWorker {
         {
           model: 'medium',
           device: 'cpu',
-          computeType: 'int8',
+          computeType: 'float16',  // Changed from int8 to float16 (more stable)
           beamSize: 5,
           vadFilter: false,  // Disable VAD for now (can enable later)
           wordTimestamps: false,
@@ -367,10 +370,25 @@ To enable real transcription:
     }
   }
 
-  private generateOutputPath(fileName: string): string {
+  private generateOutputPath(filePath: string): string {
+    // Extract the relative path from the watch directory
+    const watchDir = appConfig.processing.watchDirectory;
+    const relativePath = filePath.startsWith(watchDir)
+      ? filePath.slice(watchDir.length).replace(/^\//, '') // Remove leading slash
+      : basename(filePath); // Fallback to just filename if not in watch dir
+
+    // Get the directory structure and filename
+    const relativeDir = dirname(relativePath);
+    const fileName = basename(relativePath);
     const baseName = basename(fileName, extname(fileName));
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    return join(appConfig.processing.outputDirectory, `${baseName}_${timestamp}`);
+
+    // Build output path preserving directory structure
+    const outputDir = relativeDir && relativeDir !== '.'
+      ? join(appConfig.processing.outputDirectory, relativeDir)
+      : appConfig.processing.outputDirectory;
+
+    // Return path without timestamp (we want consistent filenames)
+    return join(outputDir, baseName);
   }
 
   private async moveCompletedFile(filePath: string): Promise<void> {
