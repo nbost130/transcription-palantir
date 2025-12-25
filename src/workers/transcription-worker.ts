@@ -393,8 +393,25 @@ To enable real transcription:
 
   private async moveCompletedFile(filePath: string): Promise<void> {
     try {
-      const fileName = basename(filePath);
-      const destPath = join(appConfig.processing.completedDirectory, fileName);
+      // Extract the relative path from the watch directory to preserve structure
+      const watchDir = appConfig.processing.watchDirectory;
+      const relativePath = filePath.startsWith(watchDir)
+        ? filePath.slice(watchDir.length).replace(/^\//, '') // Remove leading slash
+        : basename(filePath); // Fallback to just filename if not in watch dir
+
+      // Get the directory structure and filename
+      const relativeDir = dirname(relativePath);
+      const fileName = basename(relativePath);
+
+      // Build completed path preserving directory structure
+      const completedDir = relativeDir && relativeDir !== '.'
+        ? join(appConfig.processing.completedDirectory, relativeDir)
+        : appConfig.processing.completedDirectory;
+
+      // Ensure the completed subdirectory exists
+      await mkdir(completedDir, { recursive: true });
+
+      const destPath = join(completedDir, fileName);
       await rename(filePath, destPath);
       logger.debug({ from: filePath, to: destPath }, 'Moved completed file');
     } catch (error) {
@@ -404,8 +421,25 @@ To enable real transcription:
 
   private async moveFailedFile(filePath: string): Promise<void> {
     try {
-      const fileName = basename(filePath);
-      const destPath = join(appConfig.processing.failedDirectory, fileName);
+      // Extract the relative path from the watch directory to preserve structure
+      const watchDir = appConfig.processing.watchDirectory;
+      const relativePath = filePath.startsWith(watchDir)
+        ? filePath.slice(watchDir.length).replace(/^\//, '') // Remove leading slash
+        : basename(filePath); // Fallback to just filename if not in watch dir
+
+      // Get the directory structure and filename
+      const relativeDir = dirname(relativePath);
+      const fileName = basename(relativePath);
+
+      // Build failed path preserving directory structure
+      const failedDir = relativeDir && relativeDir !== '.'
+        ? join(appConfig.processing.failedDirectory, relativeDir)
+        : appConfig.processing.failedDirectory;
+
+      // Ensure the failed subdirectory exists
+      await mkdir(failedDir, { recursive: true });
+
+      const destPath = join(failedDir, fileName);
       await rename(filePath, destPath);
       logger.debug({ from: filePath, to: destPath }, 'Moved failed file');
     } catch (error) {
