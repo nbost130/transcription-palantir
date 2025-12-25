@@ -282,7 +282,7 @@ export class TranscriptionWorker {
         {
           model: 'medium',
           device: 'cpu',
-          computeType: 'float16',  // Changed from int8 to float16 (more stable)
+          computeType: 'int8',  // int8 for CPU compatibility (float16 requires GPU)
           beamSize: 5,
           vadFilter: false,  // Disable VAD for now (can enable later)
           wordTimestamps: false,
