@@ -1,8 +1,9 @@
 # Incident Report: Simulation Mode Fallback
 
-**Date:** 2025-12-26  
-**Severity:** Medium  
-**Status:** Identified, Fix in Progress
+**Date:** 2025-12-26
+**Severity:** Medium
+**Status:** ✅ RESOLVED
+**GitHub Issue:** [#6](https://github.com/nbost130/transcription-palantir/issues/6)
 
 ## Summary
 
