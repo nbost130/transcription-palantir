@@ -72,8 +72,15 @@ export class ApiServer {
 
   private registerPlugins(fastify: FastifyInstance): void {
     // CORS Configuration
+    // Parse CORS_ORIGIN - can be '*', a single origin, or comma-separated list
+    const corsOrigin = appConfig.api.corsOrigin === '*'
+      ? '*'
+      : appConfig.api.corsOrigin.includes(',')
+        ? appConfig.api.corsOrigin.split(',').map(o => o.trim())
+        : appConfig.api.corsOrigin;
+
     fastify.register(cors, {
-      origin: appConfig.api.corsOrigin,
+      origin: corsOrigin,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
