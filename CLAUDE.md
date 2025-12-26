@@ -244,6 +244,54 @@ on:
 - SSH only accessible via Tailscale IP (100.77.230.53)
 - No public SSH exposure
 
+## Configuration
+
+### Redis Connection Resilience
+
+**Added:** 2025-12-26
+**Purpose:** Prevent service crashes during DNS cache flushes and network interruptions
+
+The service implements comprehensive Redis connection resilience with the following features:
+
+#### Retry Strategy
+- **Max Retries:** 3 attempts (configurable via `REDIS_MAX_RETRIES`)
+- **Backoff:** Exponential backoff with `min(attempts * 50, 2000)ms` delay
+- **Behavior:** After max retries exceeded, service logs error and stops retrying
+
+#### Reconnect on Error
+- **Enabled by default** (configurable via `REDIS_RECONNECT_ON_ERROR`)
+- **Transient Errors Handled:**
+  - `ECONNREFUSED` - Connection refused
+  - `ENOTFOUND` - DNS resolution failure
+  - `ETIMEDOUT` - Connection timeout
+  - `ECONNRESET` - Connection reset by peer
+  - `EPIPE` - Broken pipe
+  - `READONLY` - Redis in read-only mode
+
+#### Connection Lifecycle Logging
+The service logs all Redis connection events:
+- `connect` - TCP connection established
+- `ready` - Redis handshake complete, ready for commands
+- `reconnecting` - Attempting to reconnect (with delay)
+- `close` - Connection closed
+- `end` - Connection ended, no more reconnection attempts
+- `error` - Connection error (logged but doesn't crash service)
+
+#### Environment Variables
+```bash
+# Connection resilience settings
+REDIS_MAX_RETRIES=3                    # Max reconnection attempts
+REDIS_RETRY_DELAY=1000                 # Base retry delay (ms)
+REDIS_CONNECT_TIMEOUT=10000            # Connection timeout (ms)
+REDIS_RECONNECT_ON_ERROR=true          # Auto-reconnect on transient errors
+REDIS_ENABLE_OFFLINE_QUEUE=true        # Queue commands during reconnection
+```
+
+#### Why This Matters
+On Mithrandir, Docker container network changes trigger Tailscale DNS reconfigurations, which cause systemd-resolved to flush its DNS cache. Without connection resilience, the service would crash with `DNSException: getaddrinfo ENOTFOUND` errors. With resilience enabled, the service automatically reconnects and continues processing.
+
+**Related Incident:** See incident report in `docs/reports/` directory
+
 ## Known Issues
 
 ### Progress Reporting (Issue #9)
