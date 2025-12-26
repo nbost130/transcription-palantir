@@ -2,9 +2,25 @@
 
 ## 🔐 GitHub Secrets Configuration
 
-The automated deployment workflow requires SSH access to the production server. Follow these steps to set it up:
+The automated deployment workflow requires:
+1. **Tailscale OAuth credentials** - To connect GitHub Actions to your Tailnet
+2. **SSH access** - To deploy to the production server
 
-### 1. Generate SSH Key for GitHub Actions
+Follow these steps to set it up:
+
+### 1. Create Tailscale OAuth Client
+
+GitHub Actions needs to connect to your Tailnet to reach the production server:
+
+1. Go to: https://login.tailscale.com/admin/settings/oauth
+2. Click **"Generate OAuth client"**
+3. Add tags: `tag:ci`
+4. Copy the **Client ID** and **Client Secret**
+5. Add to GitHub Secrets:
+   - Name: `TAILSCALE_OAUTH_CLIENT_ID` → Value: (paste client ID)
+   - Name: `TAILSCALE_OAUTH_SECRET` → Value: (paste client secret)
+
+### 2. Generate SSH Key for GitHub Actions
 
 On your local machine:
 
@@ -17,7 +33,7 @@ ssh-keygen -t ed25519 -C "github-actions@transcription-palantir" -f ~/.ssh/githu
 # - ~/.ssh/github_actions_mithrandir.pub (public key)
 ```
 
-### 2. Add Public Key to Production Server
+### 3. Add Public Key to Production Server
 
 ```bash
 # Copy the public key to mithrandir
@@ -27,14 +43,14 @@ ssh-copy-id -i ~/.ssh/github_actions_mithrandir.pub nbost@100.77.230.53
 cat ~/.ssh/github_actions_mithrandir.pub | ssh nbost@100.77.230.53 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
 ```
 
-### 3. Test SSH Connection
+### 4. Test SSH Connection
 
 ```bash
 # Test the key works
 ssh -i ~/.ssh/github_actions_mithrandir nbost@100.77.230.53 "echo 'SSH connection successful!'"
 ```
 
-### 4. Add Secret to GitHub
+### 5. Add SSH Secret to GitHub
 
 1. Go to: https://github.com/nbost130/transcription-palantir/settings/secrets/actions
 
