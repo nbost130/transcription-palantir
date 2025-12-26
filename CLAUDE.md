@@ -244,6 +244,26 @@ on:
 - SSH only accessible via Tailscale IP (100.77.230.53)
 - No public SSH exposure
 
+## Known Issues
+
+### Progress Reporting (Issue #9)
+
+**Problem:** Job progress shows misleading "30%" placeholder instead of actual transcription progress.
+
+**Symptoms:**
+- Jobs show `progress: 30` immediately when they start processing
+- Progress value remains at 30% throughout entire transcription (even for multi-hour jobs)
+- Log entries show empty progress field: `"progress":""`
+- Creates confusion about actual job completion status
+
+**Workaround:**
+- Ignore the progress percentage - it's just a status indicator meaning "processing"
+- Use job `startedAt` timestamp and file size to estimate completion time
+- Monitor service logs for actual completion events
+- Large files (60-120MB) typically take 2-4 hours to transcribe
+
+**Tracking:** https://github.com/nbost130/transcription-palantir/issues/9
+
 ## Related Documentation
 
 - `docs/CICD_SETUP.md` - CI/CD configuration and secrets setup
