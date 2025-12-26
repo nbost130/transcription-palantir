@@ -1,0 +1,99 @@
+name: 🚀 Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+jobs:
+  deploy:
+    name: Deploy to Mithrandir
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+      
+    - name: 🔐 Setup SSH
+      uses: webfactory/ssh-agent@v0.9.0
+      with:
+        ssh-private-key: ${{ secrets.MITHRANDIR_SSH_KEY }}
+        
+    - name: 📝 Add SSH known hosts
+      run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -H 100.77.230.53 >> ~/.ssh/known_hosts
+        
+    - name: 🚀 Deploy to production
+      run: |
+        ssh nbost@100.77.230.53 << 'ENDSSH'
+          set -e
+          
+          echo "📂 Navigating to project directory..."
+          cd /home/nbost/transcription-palantir
+          
+          echo "📥 Pulling latest changes..."
+          git pull origin main
+          
+          echo "📦 Installing dependencies..."
+          npm install
+          
+          echo "🔨 Building project..."
+          npm run build
+          
+          echo "🔄 Restarting service..."
+          sudo systemctl restart transcription-palantir
+          
+          echo "⏳ Waiting for service to start..."
+          sleep 5
+          
+          echo "✅ Verifying deployment..."
+          curl -f http://localhost:9003/api/v1/health || exit 1
+          
+          echo "🎉 Deployment successful!"
+        ENDSSH
+        
+    - name: 🔍 Verify deployment
+      run: |
+        # Wait a bit more for full startup
+        sleep 3
+        
+        # Check health endpoint
+        HEALTH=$(curl -s http://100.77.230.53:9003/api/v1/health | jq -r '.status')
+        if [ "$HEALTH" != "ok" ]; then
+          echo "❌ Health check failed: $HEALTH"
+          exit 1
+        fi
+        
+        echo "✅ Deployment verified - service is healthy"
+        
+    - name: 📊 Deployment summary
+      if: always()
+      run: |
+        echo "### 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment:** Production (Mithrandir)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Status:** ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Endpoints:**" >> $GITHUB_STEP_SUMMARY
+        echo "- Health: http://100.77.230.53:9003/api/v1/health" >> $GITHUB_STEP_SUMMARY
+        echo "- Services: http://100.77.230.53:9003/api/services/health" >> $GITHUB_STEP_SUMMARY
+        echo "- Dashboard: http://100.77.230.53:3000/services" >> $GITHUB_STEP_SUMMARY
+
