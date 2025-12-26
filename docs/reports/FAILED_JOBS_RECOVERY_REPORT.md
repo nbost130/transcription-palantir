@@ -1,7 +1,8 @@
 # 🔄 Failed Jobs Recovery Report
 
-**Date**: November 21, 2025  
+**Date**: November 21, 2025
 **Status**: ✅ **ANALYSIS COMPLETE** - Ready for Recovery
+**GitHub Issue:** [#8](https://github.com/nbost130/transcription-palantir/issues/8)
 
 ## 📋 Executive Summary
 

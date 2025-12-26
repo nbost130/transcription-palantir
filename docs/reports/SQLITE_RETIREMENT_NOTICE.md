@@ -1,7 +1,8 @@
 # 🗑️ SQLite Database Retirement Notice
 
-**Date**: November 21, 2025  
+**Date**: November 21, 2025
 **Status**: ✅ **COMPLETED**
+**GitHub Issue:** [#7](https://github.com/nbost130/transcription-palantir/issues/7)
 
 ## 📋 Summary
 
