@@ -1,0 +1,30 @@
+[Unit]
+Description=TypeScript Transcription Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=nbost
+Group=nbost
+WorkingDirectory=/home/nbost/transcription-ts
+Environment=PATH=/home/nbost/.bun/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/nbost/.bun/bin/bun multi-worker-processor.ts
+Restart=always
+RestartSec=10
+StandardOutput=append:/mnt/data/whisper-batch/logs/systemd-transcription.log
+StandardError=append:/mnt/data/whisper-batch/logs/systemd-transcription-error.log
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=8G
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=false
+ReadWritePaths=/mnt/data/whisper-batch /home/nbost/transcription-ts
+
+[Install]
+WantedBy=multi-user.target

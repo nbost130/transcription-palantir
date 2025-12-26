@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎙️ Transcription Project Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #1d1d1f;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .nav-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: 2px solid rgba(255,255,255,0.3);
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn:hover {
+            background: rgba(255,255,255,0.3);
+            border-color: rgba(255,255,255,0.5);
+            transform: translateY(-2px);
+        }
+
+        .summary-bar {
+            background: rgba(255,255,255,0.95);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .summary-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #1d1d1f;
+        }
+
+        .summary-stats {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+        }
+
+        .stat-completed { color: #30d158; }
+        .stat-failed { color: #ff3b30; }
+        .stat-processing { color: #007aff; }
+        .stat-pending { color: #ff9500; }
+
+        .main-table-container {
+            background: rgba(255,255,255,0.95);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .main-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .main-table th {
+            background: #f5f5f7;
+            padding: 16px 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #1d1d1f;
+            border-bottom: 1px solid #d2d2d7;
+        }
+
+        .main-table td {
+            padding: 16px 12px;
+            border-bottom: 1px solid #f5f5f7;
+            color: #1d1d1f;
+            vertical-align: top;
+        }
+
+        .main-table tr:hover {
+            background: rgba(0,122,255,0.05);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .status-completed { background: #30d158; }
+        .status-processing { background: #007aff; }
+        .status-pending { background: #ff9500; }
+        .status-failed { background: #ff3b30; }
+
+        .file-name {
+            font-weight: 500;
+            color: #1d1d1f;
+        }
+
+        .file-size {
+            color: #86868b;
+            font-size: 0.9rem;
+        }
+
+        .date-time {
+            color: #86868b;
+            font-size: 0.9rem;
+        }
+
+        .elapsed-time {
+            color: #86868b;
+            font-size: 0.9rem;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+
+        .error-text {
+            color: #ff3b30;
+            font-size: 0.85rem;
+            margin-top: 4px;
+            font-style: italic;
+        }
+
+        .retry-btn {
+            background: #FF9800;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+        }
+
+        .retry-btn:hover {
+            background: #F57C00;
+            transform: scale(1.05);
+        }
+
+        .error-message {
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid #f44336;
+            color: #ffcdd2;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .success-message {
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid #4CAF50;
+            color: #c8e6c9;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+        }
+
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-left: 10px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .stats {
+                justify-content: center;
+            }
+            
+            .project-header {
+                flex-direction: column;
+                gap: 15px;
+                align-items: flex-start;
+            }
+            
+            .files-table {
+                font-size: 0.9em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎙️ Transcription Project Dashboard</h1>
+            <p>Manage your homelab transcription projects</p>
+        </div>
+
+        <div class="nav-controls">
+            <a href="#" class="btn" onclick="loadProjects(); return false;">🔄 Refresh</a>
+            <div>
+                <a href="http://100.77.230.53:9999/docs" class="btn" target="_blank">📚 API Docs</a>
+                <a href="http://100.77.230.53:9999/api/v1/health" class="btn" target="_blank">💚 Health</a>
+            </div>
+        </div>
+
+        <div class="summary-bar">
+            <div class="summary-title" id="summaryTitle">📊 Summary: Loading...</div>
+            <div class="summary-stats">
+                <div class="stat-item stat-completed">
+                    <span>✅</span>
+                    <span id="completedCount">0</span>
+                    <span>completed</span>
+                </div>
+                <div class="stat-item stat-failed">
+                    <span>❌</span>
+                    <span id="failedCount">0</span>
+                    <span>failed</span>
+                </div>
+                <div class="stat-item stat-processing">
+                    <span>🔄</span>
+                    <span id="processingCount">0</span>
+                    <span>processing</span>
+                </div>
+                <div class="stat-item stat-pending">
+                    <span>⏳</span>
+                    <span id="pendingCount">0</span>
+                    <span>pending</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="main-table-container">
+            <table class="main-table">
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Project</th>
+                        <th>File Name</th>
+                        <th>Size</th>
+                        <th>Created</th>
+                        <th>Completed</th>
+                        <th>⏱️ Elapsed</th>
+                        <th>🔄 Processing</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="filesTableBody">
+                    <tr>
+                        <td colspan="9" style="text-align: center; padding: 40px; color: #86868b;">
+                            Loading transcription projects...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // API Configuration
+        const API_BASE = 'http://100.77.230.53:9999/api/v1';
+
+        // Global state
+        let allJobs = [];
+        let projects = [];
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadProjects();
+            // Auto-refresh every 30 seconds
+            setInterval(loadProjects, 30000);
+        });
+
+        // Load projects from API
+        async function loadProjects() {
+            try {
+                showLoading();
+
+                // Fetch jobs from all status endpoints
+                const [pendingRes, processingRes, completedRes, failedRes] = await Promise.all([
+                    fetch(`${API_BASE}/jobs?status=pending&limit=100`),
+                    fetch(`${API_BASE}/jobs?status=processing&limit=100`),
+                    fetch(`${API_BASE}/jobs?status=completed&limit=100`),
+                    fetch(`${API_BASE}/jobs?status=failed&limit=100`)
+                ]);
+
+                const [pendingData, processingData, completedData, failedData] = await Promise.all([
+                    pendingRes.json(),
+                    processingRes.json(),
+                    completedRes.json(),
+                    failedRes.json()
+                ]);
+
+                // Combine all jobs
+                allJobs = [
+                    ...(pendingData.data || []),
+                    ...(processingData.data || []),
+                    ...(completedData.data || []),
+                    ...(failedData.data || [])
+                ];
+
+                console.log('Loaded jobs:', allJobs.length);
+
+                // Transform job data to project format
+                projects = transformJobsToProjects(allJobs);
+
+                // Update UI
+                updateSummaryStats();
+                renderProjects(projects);
+
+                hideMessages();
+
+            } catch (error) {
+                console.error('Failed to load projects:', error);
+                showError('Failed to load projects: ' + error.message);
+            }
+        }
+
+        // Transform individual jobs into project groups
+        function transformJobsToProjects(jobs) {
+            if (!jobs || jobs.length === 0) {
+                return [];
+            }
+
+            const projectMap = {};
+
+            jobs.forEach(job => {
+                const fileName = job.fileName || 'Unknown';
+                // Group by directory or file type
+                const projectName = getProjectName(fileName);
+
+                if (!projectMap[projectName]) {
+                    projectMap[projectName] = {
+                        name: projectName,
+                        completed: 0,
+                        processing: 0,
+                        pending: 0,
+                        failed: 0,
+                        files: []
+                    };
+                }
+
+                const project = projectMap[projectName];
+                const status = job.status || 'pending';
+
+                // Count by status
+                if (status === 'completed') {
+                    project.completed++;
+                } else if (status === 'processing') {
+                    project.processing++;
+                } else if (status === 'failed') {
+                    project.failed++;
+                } else {
+                    project.pending++;
+                }
+
+                // Add file info
+                project.files.push({
+                    id: job.jobId,
+                    name: fileName,
+                    status: status,
+                    progress: job.progress || 0,
+                    startTime: job.startedAt,
+                    endTime: job.completedAt,
+                    createdAt: job.createdAt,
+                    attempts: job.attempts || 0,
+                    error: job.error || null
+                });
+            });
+
+            return Object.values(projectMap);
+        }
+
+        // Get project name from file name
+        function getProjectName(fileName) {
+            // Group by common prefixes or just use "Transcription Files"
+            if (fileName.includes('Healing is Here')) return 'Healing is Here 2025';
+            if (fileName.includes('Kingdom of God')) return 'Kingdom of God Series';
+            if (fileName.includes('Holy Spirit')) return 'Holy Spirit Series';
+            if (fileName.includes('test')) return 'Test Files';
+            if (fileName.includes('Stump The Guru')) return 'Sales Training';
+            return 'Transcription Files';
+        }
+
+        // Update summary statistics
+        function updateSummaryStats() {
+            const totalFiles = allJobs.length;
+            const stats = {
+                completed: allJobs.filter(job => job.status === 'completed').length,
+                processing: allJobs.filter(job => job.status === 'processing').length,
+                pending: allJobs.filter(job => job.status === 'pending').length,
+                failed: allJobs.filter(job => job.status === 'failed').length
+            };
+
+            document.getElementById('summaryTitle').textContent = `📊 Summary: ${totalFiles} Total Files`;
+            document.getElementById('completedCount').textContent = stats.completed;
+            document.getElementById('processingCount').textContent = stats.processing;
+            document.getElementById('pendingCount').textContent = stats.pending;
+            document.getElementById('failedCount').textContent = stats.failed;
+        }
+
+        // Render files in table format (like original dashboard)
+        function renderProjects(projects) {
+            const tableBody = document.getElementById('filesTableBody');
+
+            if (allJobs.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="9" style="text-align: center; padding: 40px; color: #86868b;">
+                            No transcription projects found.<br>
+                            Add audio files to start transcribing!
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            // Render all jobs as individual table rows
+            tableBody.innerHTML = allJobs.map(job => {
+                const projectName = getProjectName(job.fileName || 'Unknown');
+                const fileSize = formatFileSize(job.fileSize);
+                const createdDate = formatDate(job.createdAt);
+                const completedDate = job.completedAt ? formatDate(job.completedAt) : '—';
+                const elapsedTime = calculateElapsedTime(job.createdAt, job.startedAt, job.completedAt);
+                const processingTime = calculateProcessingTime(job.startedAt, job.completedAt);
+
+                return `
+                    <tr>
+                        <td>
+                            <span class="status-badge status-${job.status}">
+                                ${getStatusIcon(job.status)} ${job.status}
+                            </span>
+                        </td>
+                        <td>${projectName}</td>
+                        <td>
+                            <div class="file-name">${job.fileName || 'Unknown'}</div>
+                            ${job.error ? `<div class="error-text">Error: ${job.error}</div>` : ''}
+                        </td>
+                        <td class="file-size">${fileSize}</td>
+                        <td class="date-time">${createdDate}</td>
+                        <td class="date-time">${completedDate}</td>
+                        <td class="elapsed-time">${elapsedTime}</td>
+                        <td class="elapsed-time">${processingTime}</td>
+                        <td>
+                            ${job.status === 'failed' ? `<button class="btn" onclick="retryJob('${job.jobId}')" style="padding: 4px 8px; font-size: 0.8rem;">🔄 Retry</button>` : ''}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+
+
+        // Retry failed job
+        async function retryJob(jobId) {
+            try {
+                const response = await fetch(`${API_BASE}/jobs/${jobId}/retry`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    showSuccess('Job queued for retry successfully!');
+                    setTimeout(loadProjects, 1000); // Refresh after 1 second
+                } else {
+                    showError('Failed to retry job: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                showError('Failed to retry job: ' + error.message);
+            }
+        }
+
+        // Utility functions
+        function getStatusIcon(status) {
+            switch (status) {
+                case 'completed': return '✅';
+                case 'processing': return '🔄';
+                case 'pending': return '⏳';
+                case 'failed': return '❌';
+                default: return '❓';
+            }
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '—';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', {month: 'numeric', day: 'numeric', year: 'numeric'});
+        }
+
+        function formatFileSize(bytes) {
+            if (!bytes || bytes === 0) return '—';
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            return Math.round(bytes / Math.pow(1024, i) * 10) / 10 + ' ' + sizes[i];
+        }
+
+        function calculateElapsedTime(createdDate, startedDate, endDate) {
+            // Only show elapsed time for jobs that have actually started
+            if (!startedDate) return '—';
+
+            const start = new Date(startedDate);
+            const end = endDate ? new Date(endDate) : new Date();
+            const diffMs = end - start;
+
+            const hours = Math.floor(diffMs / (1000 * 60 * 60));
+            const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+            if (hours > 0) {
+                return `${hours}h ${minutes}m ${seconds}s`;
+            } else if (minutes > 0) {
+                return `${minutes}m ${seconds}s`;
+            } else {
+                return `${seconds}s`;
+            }
+        }
+
+        function calculateProcessingTime(startDate, endDate) {
+            if (!startDate || !endDate) return '—';
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            const diffMs = end - start;
+
+            const hours = Math.floor(diffMs / (1000 * 60 * 60));
+            const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
+
+            if (hours > 0) {
+                return `${hours}h ${minutes}m ${seconds}s`;
+            } else if (minutes > 0) {
+                return `${minutes}m ${seconds}s`;
+            } else {
+                return `${seconds}s`;
+            }
+        }
+
+        function showLoading() {
+            document.getElementById('filesTableBody').innerHTML = `
+                <tr>
+                    <td colspan="9" style="text-align: center; padding: 40px; color: #86868b;">
+                        Loading transcription projects...
+                    </td>
+                </tr>
+            `;
+        }
+
+        function showError(message) {
+            document.getElementById('filesTableBody').innerHTML = `
+                <tr>
+                    <td colspan="9" style="text-align: center; padding: 40px; color: #ff3b30;">
+                        ❌ ${message}
+                    </td>
+                </tr>
+            `;
+        }
+
+        function showSuccess(message) {
+            const container = document.querySelector('.main-table-container');
+            const successDiv = document.createElement('div');
+            successDiv.style.cssText = `
+                background: rgba(76, 175, 80, 0.1);
+                border: 1px solid #4CAF50;
+                color: #2e7d32;
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                text-align: center;
+            `;
+            successDiv.innerHTML = `✅ ${message}`;
+            container.parentNode.insertBefore(successDiv, container);
+
+            // Remove success message after 3 seconds
+            setTimeout(() => {
+                successDiv.remove();
+            }, 3000);
+        }
+
+        function hideMessages() {
+            // Remove any existing error or success messages
+            document.querySelectorAll('.error-message, .success-message').forEach(el => el.remove());
+        }
+    </script>
+</body>
+</html>
