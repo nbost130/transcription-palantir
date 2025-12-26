@@ -37,11 +37,11 @@ jobs:
     - name: 📝 Add SSH known hosts
       run: |
         mkdir -p ~/.ssh
-        ssh-keyscan -H 100.77.230.53 >> ~/.ssh/known_hosts
-        
+        ssh-keyscan -H 136.47.128.183 >> ~/.ssh/known_hosts
+
     - name: 🚀 Deploy to production
       run: |
-        ssh nbost@100.77.230.53 << 'ENDSSH'
+        ssh nbost@136.47.128.183 << 'ENDSSH'
           set -e
           
           echo "📂 Navigating to project directory..."
@@ -74,7 +74,7 @@ jobs:
         sleep 3
         
         # Check health endpoint
-        HEALTH=$(curl -s http://100.77.230.53:9003/api/v1/health | jq -r '.status')
+        HEALTH=$(curl -s http://136.47.128.183:9003/api/v1/health | jq -r '.status')
         if [ "$HEALTH" != "ok" ]; then
           echo "❌ Health check failed: $HEALTH"
           exit 1
