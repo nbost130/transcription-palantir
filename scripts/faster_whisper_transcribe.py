@@ -72,6 +72,7 @@ def transcribe_audio(
     full_text = ""
     
     print("Processing segments...", file=sys.stderr)
+    segment_count = 0
     for i, segment in enumerate(segments):
         segment_data = {
             "id": i,
@@ -79,6 +80,12 @@ def transcribe_audio(
             "end": segment.end,
             "text": segment.text.strip(),
         }
+
+        # Progress reporting every 10 segments
+        if i % 10 == 0 and i > 0:
+            print(f"Processed {i} segments...", file=sys.stderr)
+
+        segment_count = i + 1
         
         # Add word-level timestamps if requested
         if word_timestamps and hasattr(segment, 'words') and segment.words:
@@ -94,7 +101,9 @@ def transcribe_audio(
         
         segments_list.append(segment_data)
         full_text += segment.text.strip() + " "
-    
+
+    print(f"Completed processing {segment_count} segments", file=sys.stderr)
+
     # Prepare result
     result = {
         "text": full_text.strip(),

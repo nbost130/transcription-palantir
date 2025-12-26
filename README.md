@@ -23,16 +23,19 @@
          │                       │                       │
          ▼                       ▼                       ▼
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Fastify API   │    │   Job Database   │    │   Whisper.cpp   │
-│   (Dashboard)   │    │   (Redis/SQLite) │    │   (Transcriber) │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
+│   Fastify API   │    │   Single Source  │    │   Whisper.cpp   │
+│   (Dashboard)   │    │   of Truth       │    │   (Transcriber) │
+└─────────────────┘    │   (Redis Only)   │    └─────────────────┘
+                       └──────────────────┘
 ```
+
+**🗑️ SQLite Retired**: As of 2025-11-21, SQLite database was permanently retired. BullMQ (Redis) is now the single source of truth for all job data, eliminating sync issues and simplifying the architecture. See `SQLITE_RETIREMENT_NOTICE.md` for details.
 
 ## 🛠️ Technology Stack
 
 - **Runtime**: Bun (primary) / Node.js (fallback)
 - **Language**: TypeScript with strict type checking
-- **Queue**: BullMQ + Redis
+- **Queue**: BullMQ + Redis (single source of truth, SQLite retired)
 - **API**: Fastify with Swagger documentation
 - **Transcription**: Whisper.cpp (faster than Python alternatives)
 - **Process Management**: PM2 / Docker Swarm
