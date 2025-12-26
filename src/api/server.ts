@@ -73,14 +73,27 @@ export class ApiServer {
   private registerPlugins(fastify: FastifyInstance): void {
     // CORS Configuration
     // Parse CORS_ORIGIN - can be '*', a single origin, or comma-separated list
-    const corsOrigin = appConfig.api.corsOrigin === '*'
-      ? '*'
+    const allowedOrigins = appConfig.api.corsOrigin === '*'
+      ? ['*']
       : appConfig.api.corsOrigin.includes(',')
         ? appConfig.api.corsOrigin.split(',').map(o => o.trim())
-        : appConfig.api.corsOrigin;
+        : [appConfig.api.corsOrigin];
 
     fastify.register(cors, {
-      origin: corsOrigin,
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like curl, Postman, server-to-server)
+        if (!origin) {
+          callback(null, true);
+          return;
+        }
+
+        // Check if origin is in allowed list or if we allow all origins
+        if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'), false);
+        }
+      },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
