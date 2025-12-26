@@ -127,7 +127,7 @@ async function checkServiceHealth(service: ConsulService): Promise<ServiceDetail
             status: isHealthy ? 'healthy' : 'unhealthy',
             url,
             port: service.Port,
-            error: isHealthy ? undefined : 'Connection refused',
+            ...(isHealthy ? {} : { error: 'Connection refused' }),
             lastChecked,
           };
         }
@@ -147,7 +147,7 @@ async function checkServiceHealth(service: ConsulService): Promise<ServiceDetail
     // HTTP health check
     const response = await axios.get(`${url}${healthEndpoint}`, {
       timeout: 5000,
-      validateStatus: (status) => status < 500,
+      validateStatus: (status: number) => status < 500,
     });
 
     const baseResult: ServiceDetails = {
