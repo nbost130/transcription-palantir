@@ -2,6 +2,8 @@
 
 *Modern TypeScript transcription system with BullMQ, Redis, and Whisper.cpp integration*
 
+> **✨ Automated Deployment:** Push to `main` and changes deploy automatically to production!
+
 > **Palantir** - The seeing stones of Middle-earth that enable communication across vast distances. Like the ancient palantíri, this system "sees" audio content and communicates its transcribed essence across your infrastructure.
 
 ## 🚀 Features
