@@ -167,6 +167,9 @@ export interface RedisConfig {
   db: number;
   maxRetries: number;
   retryDelay: number;
+  connectTimeout: number;
+  reconnectOnError: boolean;
+  enableOfflineQueue: boolean;
 }
 
 export interface WhisperConfig {

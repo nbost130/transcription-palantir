@@ -14,9 +14,124 @@ import { JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js
 // REDIS CONNECTION
 // =============================================================================
 
+/**
+ * Create Redis connection with resilience configuration
+ *
+ * Features:
+ * - Exponential backoff retry strategy
+ * - Reconnect on transient errors (DNS, connection refused, timeout)
+ * - Error event handling to prevent crashes
+ * - Offline queue for commands during reconnection
+ */
 const redisConnection = new Redis(getRedisUrl(), {
   maxRetriesPerRequest: null, // Required for BullMQ
   lazyConnect: false, // Connect immediately
+  connectTimeout: appConfig.redis.connectTimeout,
+  enableOfflineQueue: appConfig.redis.enableOfflineQueue,
+
+  /**
+   * Retry strategy with exponential backoff
+   * @param times - Number of reconnection attempts
+   * @returns Delay in milliseconds before next retry, or null to stop retrying
+   */
+  retryStrategy(times: number): number | null {
+    if (times > appConfig.redis.maxRetries) {
+      queueLogger.error(
+        { attempts: times },
+        'Max Redis connection retries exceeded, giving up'
+      );
+      return null; // Stop retrying
+    }
+
+    // Exponential backoff: min(times * 50, 2000)ms
+    const delay = Math.min(times * 50, 2000);
+    queueLogger.warn(
+      { attempt: times, delayMs: delay },
+      'Redis connection failed, retrying...'
+    );
+    return delay;
+  },
+
+  /**
+   * Reconnect on specific transient errors
+   * @param err - Error from Redis
+   * @returns true to reconnect, false to not reconnect
+   */
+  reconnectOnError(err: Error): boolean | 1 | 2 {
+    if (!appConfig.redis.reconnectOnError) {
+      return false;
+    }
+
+    // List of transient errors that should trigger reconnection
+    const transientErrors = [
+      'ECONNREFUSED',  // Connection refused
+      'ENOTFOUND',     // DNS resolution failed
+      'ETIMEDOUT',     // Connection timeout
+      'ECONNRESET',    // Connection reset by peer
+      'EPIPE',         // Broken pipe
+      'READONLY',      // Redis in readonly mode (failover)
+    ];
+
+    const shouldReconnect = transientErrors.some(errCode =>
+      err.message.includes(errCode)
+    );
+
+    if (shouldReconnect) {
+      queueLogger.warn(
+        { error: err.message },
+        'Transient Redis error detected, reconnecting...'
+      );
+      return true; // Reconnect but don't resend failed command
+    }
+
+    return false;
+  },
+});
+
+/**
+ * Handle Redis connection errors gracefully
+ * This prevents the application from crashing on connection issues
+ */
+redisConnection.on('error', (err: Error) => {
+  queueLogger.error(
+    { error: err.message, code: (err as any).code },
+    'Redis connection error (will retry automatically)'
+  );
+});
+
+/**
+ * Log successful Redis connections
+ */
+redisConnection.on('connect', () => {
+  queueLogger.info('Redis connection established');
+});
+
+/**
+ * Log when Redis is ready to accept commands
+ */
+redisConnection.on('ready', () => {
+  queueLogger.info('Redis connection ready');
+});
+
+/**
+ * Log reconnection attempts
+ */
+redisConnection.on('reconnecting', (delay: number) => {
+  queueLogger.info({ delayMs: delay }, 'Reconnecting to Redis...');
+});
+
+/**
+ * Log when connection is closed
+ */
+redisConnection.on('close', () => {
+  queueLogger.warn('Redis connection closed');
+});
+
+/**
+ * Log when connection ends (no more reconnections)
+ */
+redisConnection.on('end', () => {
+  queueLogger.error('Redis connection ended, no more reconnection attempts');
 });
 
 // =============================================================================

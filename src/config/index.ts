@@ -32,6 +32,9 @@ const EnvSchema = z.object({
   REDIS_DB: z.coerce.number().default(0),
   REDIS_MAX_RETRIES: z.coerce.number().default(3),
   REDIS_RETRY_DELAY: z.coerce.number().default(1000),
+  REDIS_CONNECT_TIMEOUT: z.coerce.number().default(10000),
+  REDIS_RECONNECT_ON_ERROR: z.coerce.boolean().default(true),
+  REDIS_ENABLE_OFFLINE_QUEUE: z.coerce.boolean().default(true),
 
   // Whisper Configuration
   WHISPER_MODEL: z.string().default('medium'),
@@ -91,6 +94,9 @@ function createConfig(): AppConfig {
       db: env.REDIS_DB,
       maxRetries: env.REDIS_MAX_RETRIES,
       retryDelay: env.REDIS_RETRY_DELAY,
+      connectTimeout: env.REDIS_CONNECT_TIMEOUT,
+      reconnectOnError: env.REDIS_RECONNECT_ON_ERROR,
+      enableOfflineQueue: env.REDIS_ENABLE_OFFLINE_QUEUE,
     },
 
     whisper: {
