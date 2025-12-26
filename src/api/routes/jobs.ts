@@ -204,17 +204,29 @@ export async function jobRoutes(
 
     const response: PaginatedResponse<any> = {
       success: true,
-      data: jobs.map(job => ({
-        jobId: job.id,
-        fileName: job.data.fileName,
-        status: job.data.status,
-        priority: job.data.priority,
-        progress: job.data.progress || 0,
-        createdAt: job.data.createdAt,
-        startedAt: job.data.startedAt,
-        completedAt: job.data.completedAt,
-        attempts: job.attemptsMade,
-      })),
+      data: jobs.map(job => {
+        // Derive status from BullMQ job state
+        let jobStatus = 'pending';
+        if (job.finishedOn) {
+          jobStatus = job.failedReason ? 'failed' : 'completed';
+        } else if (job.processedOn && !job.finishedOn) {
+          jobStatus = 'processing';
+        }
+
+        return {
+          jobId: job.id,
+          fileName: job.data.fileName,
+          status: jobStatus,
+          priority: job.data.priority,
+          progress: job.progress || 0,
+          createdAt: job.data.createdAt || new Date(job.timestamp).toISOString(),
+          startedAt: job.processedOn ? new Date(job.processedOn).toISOString() : null,
+          completedAt: job.finishedOn ? new Date(job.finishedOn).toISOString() : null,
+          attempts: job.attemptsMade,
+          error: job.failedReason || null,
+          fileSize: job.data.fileSize || null,
+        };
+      }),
       pagination: {
         page: validated.page,
         limit: validated.limit,
@@ -388,6 +400,94 @@ export async function jobRoutes(
   });
 
   // ---------------------------------------------------------------------------
+  // Get Projects (Dashboard Compatibility)
+  // ---------------------------------------------------------------------------
+
+  fastify.get('/projects', {
+    schema: {
+      description: 'Get projects grouped by directory for dashboard compatibility',
+      tags: ['jobs'],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            projects: { type: 'array' },
+            timestamp: { type: 'string' },
+            requestId: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    // Get all jobs from different statuses
+    const [pendingJobs, processingJobs, completedJobs, failedJobs] = await Promise.all([
+      transcriptionQueue.getJobs(JobStatus.PENDING, 0, 1000),
+      transcriptionQueue.getJobs(JobStatus.PROCESSING, 0, 1000),
+      transcriptionQueue.getJobs(JobStatus.COMPLETED, 0, 1000),
+      transcriptionQueue.getJobs(JobStatus.FAILED, 0, 1000),
+    ]);
+
+    // Group jobs by directory (project)
+    const projectMap = new Map<string, any>();
+
+    const allJobs = [...pendingJobs, ...processingJobs, ...completedJobs, ...failedJobs];
+
+    allJobs.forEach(job => {
+      const filePath = job.data.filePath || job.data.fileName || 'Unknown';
+      const pathParts = filePath.split('/');
+      const projectName = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'Root';
+
+      if (!projectMap.has(projectName)) {
+        projectMap.set(projectName, {
+          name: projectName,
+          completed: 0,
+          processing: 0,
+          pending: 0,
+          failed: 0,
+          files: []
+        });
+      }
+
+      const project = projectMap.get(projectName);
+      const jobStatus = job.data.status || (job.finishedOn ? 'completed' : job.processedOn ? 'processing' : 'pending');
+
+      // Count by status
+      if (jobStatus === 'completed' || job.finishedOn) {
+        project.completed++;
+      } else if (jobStatus === 'processing' || job.processedOn) {
+        project.processing++;
+      } else if (jobStatus === 'failed' || job.failedReason) {
+        project.failed++;
+      } else {
+        project.pending++;
+      }
+
+      // Add file info
+      project.files.push({
+        id: job.id,
+        name: job.data.fileName || 'Unknown',
+        status: jobStatus,
+        progress: job.progress || 0,
+        error: job.failedReason || null,
+        startTime: job.processedOn ? new Date(job.processedOn).toISOString() : null,
+        endTime: job.finishedOn ? new Date(job.finishedOn).toISOString() : null,
+      });
+    });
+
+    const projects = Array.from(projectMap.values());
+
+    const response = {
+      success: true,
+      projects,
+      timestamp: new Date().toISOString(),
+      requestId: request.id,
+    };
+
+    return response;
+  });
+
+  // ---------------------------------------------------------------------------
   // Delete Job
   // ---------------------------------------------------------------------------
 
@@ -507,6 +607,53 @@ export async function jobRoutes(
     const response: ApiResponse = {
       success: true,
       data: stats,
+      timestamp: new Date().toISOString(),
+      requestId: request.id,
+    };
+
+    return response;
+  });
+
+  // ---------------------------------------------------------------------------
+  // Clean Failed Jobs
+  // ---------------------------------------------------------------------------
+
+  fastify.post('/queue/clean-failed', {
+    schema: {
+      description: 'Clean failed jobs from queue history',
+      tags: ['queue'],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: { type: 'object' },
+            timestamp: { type: 'string' },
+            requestId: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    // Get failed jobs count before cleaning
+    const failedJobsBefore = await transcriptionQueue.getJobs(JobStatus.FAILED, 0, 1000);
+    const countBefore = failedJobsBefore.length;
+
+    // Clean the queue (removes old completed and failed jobs)
+    await transcriptionQueue.cleanQueue(0); // 0 grace period = clean all
+
+    // Get failed jobs count after cleaning
+    const failedJobsAfter = await transcriptionQueue.getJobs(JobStatus.FAILED, 0, 1000);
+    const countAfter = failedJobsAfter.length;
+
+    const response: ApiResponse = {
+      success: true,
+      data: {
+        message: 'Failed jobs cleaned successfully',
+        failedJobsRemoved: countBefore - countAfter,
+        failedJobsBefore: countBefore,
+        failedJobsAfter: countAfter,
+      },
       timestamp: new Date().toISOString(),
       requestId: request.id,
     };

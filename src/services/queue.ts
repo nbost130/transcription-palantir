@@ -233,13 +233,29 @@ export class TranscriptionQueue {
       logQueueEvent('job_active', { jobId });
     });
 
-    this.queueEvents.on('stalled', ({ jobId }) => {
+    this.queueEvents.on('stalled', async ({ jobId }) => {
       logQueueEvent('job_stalled', { jobId });
+      await this.handleStalledJob(jobId);
     });
 
     this.queueEvents.on('progress', ({ jobId, data }) => {
       logQueueEvent('job_progress', { jobId, progress: data });
     });
+  }
+
+  private async handleStalledJob(jobId: string): Promise<void> {
+    try {
+      queueLogger.warn({ jobId }, 'Handling stalled job');
+
+      const job = await this.getJob(jobId);
+      if (job) {
+        // BullMQ will automatically retry stalled jobs
+        // We just log it for monitoring purposes
+        queueLogger.info({ jobId }, 'Stalled job will be automatically retried by BullMQ');
+      }
+    } catch (error) {
+      queueLogger.error({ error, jobId }, 'Error handling stalled job');
+    }
   }
 
   // ===========================================================================
