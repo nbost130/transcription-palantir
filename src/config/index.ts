@@ -11,6 +11,9 @@ import type { AppConfig } from '../types/index.js';
 // Load environment variables
 config();
 
+// Application version
+export const APP_VERSION = '1.0.1';
+
 // =============================================================================
 // ENVIRONMENT VALIDATION SCHEMA
 // =============================================================================
