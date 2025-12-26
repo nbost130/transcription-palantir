@@ -1,33 +1,47 @@
-# 🔮 Unified API Integration Plan
+# 🔮 Unified API Integration - IMPLEMENTATION STATUS
 
-## Current Architecture vs. Recommended
+## ✅ INTEGRATION COMPLETE
 
-### **Current: Standalone API Server**
+The integration between Transcription Palantir and Mithrandir Unified API has been successfully implemented using the **API Gateway/Proxy Pattern**.
+
+## Current Production Architecture
+
+### **Transcription Palantir (Port 9003) - Backend Service**
 ```
-Transcription Palantir (Port 3001)
-├── Fastify Server
+Transcription Palantir (Port 9003)
+├── Fastify Server (Internal API)
 ├── API Routes (/api/v1/*)
-├── Swagger Docs (/docs)
-├── WebSocket (/ws)
+│   ├── /api/v1/jobs
+│   ├── /api/v1/monitor/*
+│   └── /api/v1/health
 └── Background Services
     ├── File Watcher
     ├── Workers
-    └── Queue
+    └── Queue (BullMQ + Redis)
 ```
 
-### **Recommended: Unified API Integration**
+**Purpose:** Backend transcription processing service
+**Access:** Internal only (backend services can access directly)
+
+### **Mithrandir Unified API (Port 8080) - API Gateway**
 ```
-Mithrandir Unified API (Port 3000)
-├── /api/transcription/*  ← Integrated routes
-│   ├── /jobs
-│   ├── /health
-│   ├── /metrics
-│   └── /monitor
-└── Background Services (Separate Processes)
-    ├── File Watcher Service
-    ├── Transcription Workers
-    └── Queue Management
+Mithrandir Unified API (Port 8080)
+├── Dashboard Routes
+│   ├── /api/dashboard/stats
+│   ├── /api/dashboard/activity
+│   └── /api/dashboard/trends
+├── Transcription Proxy Routes
+│   ├── /transcription/jobs  → Proxies to Palantir:9003/api/v1/jobs
+│   ├── /transcription/jobs/:id → Proxies to Palantir:9003/api/v1/jobs/:id
+│   └── /transcription/jobs/:id/retry → Proxies to Palantir:9003/api/v1/jobs/:id/retry
+└── System Routes
+    ├── /ssh-status
+    ├── /health
+    └── /services/health
 ```
+
+**Purpose:** API Gateway/BFF (Backend for Frontend)
+**Access:** All frontends (mithrandir-admin dashboard, etc.)
 
 ## Implementation Steps
 
@@ -93,19 +107,21 @@ bun run services/queue-manager.ts
 - ✅ Unified testing approach
 - ✅ Single API gateway
 
-## Migration Strategy
+## ✅ Implementation Approach: API Gateway/Proxy Pattern
 
-### **Option A: Full Integration (Recommended)**
-1. Extract service layer from current API
-2. Create unified API routes
-3. Deploy background services separately
-4. Retire standalone API server
+**We chose the Hybrid Approach with API Gateway pattern:**
 
-### **Option B: Hybrid Approach**
-1. Keep standalone API for development/testing
-2. Add unified API routes for production
-3. Gradually migrate clients
-4. Eventually retire standalone API
+1. ✅ Transcription Palantir runs as standalone backend service (port 9003)
+2. ✅ Unified API proxies requests to Palantir (port 8080 → 9003)
+3. ✅ Frontends access only the Unified API (port 8080)
+4. ✅ Backend services can access Palantir directly if needed
+
+**Why this pattern:**
+- ✅ Service independence - Palantir focuses on transcription
+- ✅ Centralized cross-cutting concerns (CORS, auth, rate limiting)
+- ✅ Consistent API contracts for frontends
+- ✅ Flexibility to change backend services without affecting clients
+- ✅ Single entry point for all frontend requests
 
 ## File Structure After Integration
 
@@ -128,37 +144,84 @@ transcription-palantir/
     └── start-api-server.ts          ← Optional: standalone mode
 ```
 
-## Deployment Architecture
+## ✅ Production Deployment Architecture
 
-### **Production (Mithrandir)**
+### **Current Production Setup (Mithrandir)**
 ```
-┌─────────────────────────────────────┐
-│         Mithrandir Server           │
-│                                     │
-│  ┌─────────────────────────────────┐│
-│  │      Unified API (Port 3000)   ││
-│  │   /api/transcription/*          ││
-│  └─────────────────────────────────┘│
-│                                     │
-│  ┌─────────────────────────────────┐│
-│  │     Background Services         ││
-│  │  • File Watcher                 ││
-│  │  • Transcription Workers        ││
-│  │  • Queue Management             ││
-│  └─────────────────────────────────┘│
-│                                     │
-│  ┌─────────────────────────────────┐│
-│  │         Redis Queue             ││
-│  └─────────────────────────────────┘│
-└─────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                    Mithrandir Server                         │
+│                                                              │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │         Mithrandir Admin Dashboard (Port 3000)         │ │
+│  │              Frontend (React + Vite)                   │ │
+│  └────────────────────────────────────────────────────────┘ │
+│                            │                                 │
+│                            │ HTTP/REST                        │
+│                            ▼                                 │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │      Mithrandir Unified API (Port 8080)                │ │
+│  │           API Gateway / BFF                            │ │
+│  │                                                        │ │
+│  │  • /api/dashboard/*  → Dashboard stats                │ │
+│  │  • /transcription/*  → Proxy to Palantir              │ │
+│  │  • /ssh-status       → System monitoring              │ │
+│  │  • /services/*       → Service health                 │ │
+│  │                                                        │ │
+│  │  Cross-cutting: CORS, Rate Limiting, Logging          │ │
+│  └────────────────────────────────────────────────────────┘ │
+│                            │                                 │
+│                            │ HTTP/REST (internal)             │
+│                            ▼                                 │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │     Transcription Palantir (Port 9003)                 │ │
+│  │          Backend Service (Internal)                    │ │
+│  │                                                        │ │
+│  │  • /api/v1/jobs      → Job management                 │ │
+│  │  • /api/v1/monitor/* → Service monitoring             │ │
+│  │  • /api/v1/health    → Health checks                  │ │
+│  │                                                        │ │
+│  │  Background: Workers, Queue, File Watcher             │ │
+│  └────────────────────────────────────────────────────────┘ │
+│                            │                                 │
+│                            ▼                                 │
+│  ┌────────────────────────────────────────────────────────┐ │
+│  │              Redis (Port 6379)                         │ │
+│  │         BullMQ Queue + Job Storage                     │ │
+│  └────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-## Next Steps
+## 🚨 CRITICAL: Frontend Configuration
 
-1. **Decide on integration approach** (Full vs. Hybrid)
-2. **Extract service layer** from current API routes
-3. **Create unified API routes** for your main API
-4. **Test integration** with background services
-5. **Deploy to Mithrandir** with unified endpoints
+### **✅ CORRECT Configuration**
 
-Would you like me to start implementing the service layer extraction?
+All frontends MUST point to the Unified API (port 8080):
+
+```bash
+# .env for mithrandir-admin
+VITE_API_BASE_URL=http://100.77.230.53:8080
+VITE_TRANSCRIPTION_API=http://100.77.230.53:8080/transcription
+VITE_UNIFIED_API=http://100.77.230.53:8080
+```
+
+### **❌ INCORRECT Configuration**
+
+DO NOT point frontends directly to backend services:
+
+```bash
+# ❌ WRONG - Do not do this!
+VITE_API_BASE_URL=http://100.77.230.53:9003
+VITE_TRANSCRIPTION_API=http://100.77.230.53:9003/api/v1
+```
+
+**Why this is wrong:**
+- Backend services have different API structures (`/api/v1/*` vs `/transcription/*`)
+- Missing dashboard routes (`/api/dashboard/*`)
+- No centralized CORS, auth, or rate limiting
+- Breaks service abstraction
+
+## 📚 Related Documentation
+
+- [Transcription Palantir README](./README.md) - Backend service documentation
+- [Mithrandir Unified API README](../mithrandir-unified-api/README.md) - API Gateway documentation
+- [Mithrandir Admin README](../mithrandir-admin/README.md) - Frontend dashboard documentation

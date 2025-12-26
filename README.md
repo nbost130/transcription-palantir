@@ -6,6 +6,21 @@
 
 > **Palantir** - The seeing stones of Middle-earth that enable communication across vast distances. Like the ancient palantíri, this system "sees" audio content and communicates its transcribed essence across your infrastructure.
 
+## 🎯 Service Role
+
+**Transcription Palantir is a BACKEND SERVICE** - it focuses exclusively on audio transcription processing. It is NOT intended for direct frontend access.
+
+### **Access Pattern:**
+- ✅ **Frontends** → Access via **Mithrandir Unified API** (port 8080) at `/transcription/*`
+- ✅ **Backend Services** → Can access directly at port 9003 for service-to-service communication
+- ❌ **DO NOT** configure frontends to access port 9003 directly
+
+The Unified API acts as an API Gateway/BFF (Backend for Frontend), providing:
+- Consistent API contracts across all services
+- Centralized CORS, authentication, and rate limiting
+- Service abstraction and flexibility
+- Data aggregation from multiple backend services
+
 ## 🚀 Features
 
 - **Modern Queue System**: BullMQ + Redis for robust job management
@@ -114,18 +129,31 @@ bun run start:worker   # Transcription workers
 bun run start:watcher  # File watcher
 ```
 
-### API Endpoints
+### API Endpoints (Internal - Port 9003)
 
-- `GET /health` - Health check
-- `GET /metrics` - Prometheus metrics
-- `GET /api/jobs` - List transcription jobs
-- `POST /api/jobs` - Create new transcription job
-- `GET /api/jobs/:id` - Get job status
-- `DELETE /api/jobs/:id` - Cancel job
+**⚠️ These endpoints are for internal/backend use only. Frontends should access via Unified API.**
 
-### Dashboard
+- `GET /api/v1/health` - Health check
+- `GET /api/v1/metrics` - Prometheus metrics
+- `GET /api/v1/jobs` - List transcription jobs
+- `POST /api/v1/jobs` - Create new transcription job
+- `GET /api/v1/jobs/:id` - Get job status
+- `DELETE /api/v1/jobs/:id` - Cancel job
+- `GET /api/v1/monitor/queue` - Queue monitoring
+- `GET /api/v1/monitor/workers` - Worker status
+- `GET /api/v1/monitor/status` - System status
 
-Access the real-time dashboard at `http://localhost:3000/dashboard`
+### Frontend Access (via Unified API - Port 8080)
+
+**✅ Frontends should use these endpoints:**
+
+- `GET http://mithrandir:8080/transcription/jobs` - List jobs (proxied to Palantir)
+- `POST http://mithrandir:8080/transcription/jobs` - Create job (proxied to Palantir)
+- `GET http://mithrandir:8080/transcription/jobs/:id` - Get job (proxied to Palantir)
+- `GET http://mithrandir:8080/api/dashboard/stats` - Dashboard statistics
+- `GET http://mithrandir:8080/api/dashboard/activity` - Recent activity
+
+See [Mithrandir Unified API documentation](../mithrandir-unified-api/README.md) for complete API reference.
 
 ## 🧪 Development
 
