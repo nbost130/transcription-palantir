@@ -88,8 +88,8 @@ export class FasterWhisperService {
     }, 'Starting faster-whisper transcription');
 
     try {
-      // Run faster-whisper Python script
-      await this.runPythonScript(args);
+      // Run faster-whisper Python script (file growth monitor detects stuck processes)
+      await this.runPythonScript(args, inputFile);
 
       // Read and parse the output
       const result = await this.parseTranscriptionOutput(outputFile);
@@ -148,9 +148,9 @@ export class FasterWhisperService {
   }
 
   /**
-   * Run Python script
+   * Run Python script without timeout - rely on file growth monitoring for stuck detection
    */
-  private async runPythonScript(args: string[]): Promise<void> {
+  private async runPythonScript(args: string[], inputPath?: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const child = spawn(this.pythonPath, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -158,9 +158,17 @@ export class FasterWhisperService {
 
       let stderr = '';
       let stdout = '';
+      let isResolved = false;
+
+      // Log start without timeout - file growth monitor will detect stuck processes
+      logger.info({ inputPath }, 'Starting transcription process - file growth monitor will detect if stuck');
 
       child.stderr?.on('data', (data) => {
         stderr += data.toString();
+        // Log progress to help with debugging
+        if (stderr.includes('Loading model:') || stderr.includes('Processing segments')) {
+          logger.info({ progress: stderr.split('\n').pop() }, 'Transcription progress');
+        }
       });
 
       child.stdout?.on('data', (data) => {
@@ -168,15 +176,22 @@ export class FasterWhisperService {
       });
 
       child.on('close', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`Python script failed with code ${code}. stderr: ${stderr}`));
+        if (!isResolved) {
+          isResolved = true;
+
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(new Error(`Python script failed with code ${code}. stderr: ${stderr}`));
+          }
         }
       });
 
       child.on('error', (error) => {
-        reject(new Error(`Failed to spawn Python: ${error.message}`));
+        if (!isResolved) {
+          isResolved = true;
+          reject(new Error(`Failed to spawn Python: ${error.message}`));
+        }
       });
     });
   }
@@ -200,6 +215,8 @@ export class FasterWhisperService {
       throw new Error(`Failed to read transcription output: ${(error as Error).message}`);
     }
   }
+
+
 }
 
 export const fasterWhisperService = new FasterWhisperService();

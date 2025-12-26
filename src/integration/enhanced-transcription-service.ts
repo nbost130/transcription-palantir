@@ -164,9 +164,9 @@ export class EnhancedTranscriptionService {
 
       // Retry the job using BullMQ
       await job.retry();
-      
+
       logger.info({ jobId }, 'Job retried successfully');
-      
+
       return {
         status: 'success',
         message: 'Job retried successfully',
@@ -182,6 +182,90 @@ export class EnhancedTranscriptionService {
         timestamp: new Date().toISOString()
       };
     }
+  }
+
+  /**
+   * Get dashboard data directly from Redis (bypasses SQLite)
+   * This replaces the old getTranscriptionDashboard method
+   */
+  async getTranscriptionDashboard(): Promise<{ recentJobs: any[]; orbisJobs: any[] }> {
+    try {
+      await this.ensureInitialized();
+
+      // Get all jobs from Redis BullMQ
+      const allJobs = await this.queue.getAllJobs();
+
+      // Get active jobs to properly distinguish processing vs pending
+      const activeJobs = await this.queue.getJobs(JobStatus.PROCESSING, 0, 100);
+      const activeJobIds = new Set(activeJobs.map(job => job.id).filter((id): id is string => id !== undefined));
+
+      // Map to dashboard format with proper status mapping
+      const dashboardJobs = allJobs.map(job => this.mapJobToDashboardFormat(job, activeJobIds));
+
+      // Separate recent jobs and Orbis jobs
+      const recentJobs = dashboardJobs.slice(0, 100); // Limit recent jobs
+      const orbisJobs = dashboardJobs.filter(job =>
+        job.filePath?.includes('Orbis') ||
+        job.fileName?.includes('LESSON') ||
+        job.fileName?.includes('Orbis')
+      );
+
+      return { recentJobs, orbisJobs };
+    } catch (error) {
+      logger.error({ error }, 'Failed to get dashboard data from Redis');
+      return { recentJobs: [], orbisJobs: [] };
+    }
+  }
+
+  private mapJobToDashboardFormat(job: Job, activeJobIds: Set<string>): any {
+    const status = this.mapJobStatusToDashboard(job, activeJobIds);
+    const now = Date.now();
+
+    // Calculate elapsed time since job creation
+    const elapsedSeconds = Math.floor((now - job.timestamp) / 1000);
+
+    // Calculate processing time (if job has started)
+    let processingSeconds: number | undefined = undefined;
+    if (job.processedOn) {
+      if (job.finishedOn) {
+        // Job finished - calculate total processing time
+        processingSeconds = Math.floor((job.finishedOn - job.processedOn) / 1000);
+      } else if (status === 'processing') {
+        // Job still processing - calculate current processing time
+        processingSeconds = Math.floor((now - job.processedOn) / 1000);
+      }
+    }
+
+    return {
+      id: job.id!,
+      fileName: job.data.fileName,
+      filePath: job.data.inputPath,
+      status,
+      createdAt: new Date(job.timestamp).toISOString(),
+      startedAt: job.processedOn ? new Date(job.processedOn).toISOString() : undefined,
+      completedAt: job.finishedOn && status === 'completed' ? new Date(job.finishedOn).toISOString() : undefined,
+      error: job.failedReason || '',
+      fileSize: job.data.fileSize,
+      outputPath: job.data.outputPath,
+      elapsedSeconds,
+      processingSeconds
+    };
+  }
+
+  private mapJobStatusToDashboard(job: Job, activeJobIds: Set<string>): string {
+    // Check if job is finished first
+    if (job.finishedOn) {
+      if (job.failedReason) return 'failed';
+      return 'completed';
+    }
+
+    // Check if job is actively being processed (in active queue)
+    if (activeJobIds.has(job.id!)) {
+      return 'processing';
+    }
+
+    // Otherwise it's waiting to be processed (pending)
+    return 'pending';
   }
 
   /**
