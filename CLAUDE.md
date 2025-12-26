@@ -28,25 +28,45 @@ Transcription Palantir is a modern TypeScript transcription service using:
 
 **CRITICAL: NEVER make changes directly on production server!**
 
+#### Automated Deployment (Preferred Method)
+
+The project uses **GitHub Actions** for automated deployment:
+
 1. **Make changes in local dev environment** (`/Users/nbost/dev/transcription-palantir`)
 2. **Test locally** if possible
 3. **Commit to git** with descriptive commit message
-4. **Deploy using deployment script:**
+4. **Push to main branch:**
    ```bash
-   cd dev/transcription-palantir
-   bash scripts/deploy-to-mithrandir.sh
+   git push origin main
    ```
-5. **Restart service with systemd:**
-   ```bash
-   ssh mithrandir "systemctl --user restart transcription-palantir"
-   ```
-6. **Verify deployment:**
-   ```bash
-   ssh mithrandir "systemctl --user status transcription-palantir"
-   ssh mithrandir "tail -f ~/transcription-palantir/logs/service.log"
-   ```
+5. **GitHub Actions automatically:**
+   - Connects to Tailnet via Tailscale OAuth
+   - SSHs to production server (100.77.230.53)
+   - Pulls latest code
+   - Installs dependencies
+   - Builds TypeScript
+   - Restarts service
+   - Verifies health
+6. **Monitor deployment:**
+   - GitHub Actions: https://github.com/nbost130/transcription-palantir/actions
+   - Production health: `curl http://100.77.230.53:9003/api/v1/health`
 
-**Note:** The deployment script:
+**Smart Deployment Triggers:**
+- ✅ Code changes (`.ts`, `.js`, `package.json`) → Deploys automatically
+- ❌ Documentation changes (`.md`, `docs/`) → Skips deployment (CI still runs)
+- ❌ Config files (`.gitignore`, `LICENSE`) → Skips deployment
+
+#### Manual Deployment (Fallback)
+
+If automated deployment fails or you need manual control:
+
+```bash
+cd dev/transcription-palantir
+bash scripts/deploy-to-mithrandir.sh
+ssh mithrandir "systemctl --user restart transcription-palantir"
+```
+
+**Note:** The manual deployment script:
 - Backs up the remote `.env` file
 - Syncs code (excluding `.env`, `node_modules`, logs)
 - Builds on remote server
@@ -170,9 +190,65 @@ ssh mithrandir "systemctl --user restart transcription-palantir"
 4. **Check logs after deployment** - Verify no "simulation mode" warnings
 5. **Use systemd for service management** - Don't use `pkill` or `nohup`
 
+## CI/CD Pipeline
+
+### GitHub Actions Workflows
+
+1. **🔮 Transcription Palantir CI** (`.github/workflows/ci.yml`)
+   - Runs on: Every push to any branch
+   - Purpose: Tests, linting, type checking
+   - Does NOT deploy
+
+2. **🚀 Deploy to Production** (`.github/workflows/deploy.yml`)
+   - Runs on: Push to `main` (excluding docs-only changes)
+   - Purpose: Automated deployment to production
+   - Requires: Tailscale OAuth + SSH key secrets
+
+### Required GitHub Secrets
+
+- `TAILSCALE_OAUTH_CLIENT_ID` - Tailscale OAuth client ID (scope: `auth_keys` write)
+- `TAILSCALE_OAUTH_SECRET` - Tailscale OAuth client secret
+- `MITHRANDIR_SSH_KEY` - SSH private key for production server access
+
+See `docs/CICD_SETUP.md` for detailed setup instructions.
+
+### Deployment Workflow Details
+
+**Trigger Conditions:**
+```yaml
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - '**.md'        # All markdown files
+      - 'docs/**'      # Documentation directory
+      - 'LICENSE'      # License file
+      - '.gitignore'   # Git ignore file
+```
+
+**Deployment Steps:**
+1. Checkout code from GitHub
+2. Connect to Tailnet (using Tailscale GitHub Action)
+3. Setup SSH authentication
+4. Add SSH known hosts
+5. Deploy to production:
+   - `git pull origin main`
+   - `npm install`
+   - `npm run build`
+   - `sudo systemctl restart transcription-palantir`
+6. Verify deployment (health check)
+7. Post deployment summary
+
+**Access Method:**
+- Uses Tailscale VPN to securely reach production server
+- SSH only accessible via Tailscale IP (100.77.230.53)
+- No public SSH exposure
+
 ## Related Documentation
 
+- `docs/CICD_SETUP.md` - CI/CD configuration and secrets setup
 - `docs/DEVELOPMENT_WORKFLOW.md` - Detailed development process
 - `docs/PRODUCTION_GUIDELINES.md` - Production deployment rules
 - `docs/reports/` - Incident reports and post-mortems
+- `.github/workflows/` - GitHub Actions workflow definitions
 
