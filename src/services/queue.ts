@@ -373,6 +373,57 @@ export class TranscriptionQueue {
     }
   }
 
+  async updateJobPriority(jobId: string, priority: JobPriority): Promise<Job> {
+    const job = await this.getJob(jobId);
+
+    if (!job) {
+      throw new Error('Job not found');
+    }
+
+    const isFinished = (await job.isCompleted()) || (await job.isFailed());
+    if (isFinished) {
+      throw new Error('Cannot update priority of completed or failed jobs');
+    }
+
+    const oldPriority = job.data.priority;
+
+    // Logic differs for delayed jobs as priority and delay must be updated
+    // by re-adding the job. For other states, we can change priority directly.
+    if (await job.isDelayed()) {
+      const newDelay = this.calculateDelay(priority);
+      // Re-adding the job with the same ID, new priority, and new delay
+      // effectively updates the existing delayed job.
+      await this.queue.add(
+        job.name,
+        { ...job.data, priority }, // Update priority in data payload
+        {
+          ...job.opts,
+          ...(job.id && { jobId: job.id }),
+          priority,
+          delay: newDelay,
+        },
+      );
+    } else {
+      await job.changePriority({ priority });
+      await job.updateData({ ...job.data, priority });
+    }
+
+    logQueueEvent('job_priority_updated', {
+      jobId,
+      oldPriority: oldPriority,
+      newPriority: priority,
+    });
+
+    // The job object might be stale after these operations, so we refetch it
+    // to return the truly updated state.
+    const updatedJob = await this.getJob(jobId);
+    if (!updatedJob) {
+      throw new Error('Job not found after priority update');
+    }
+
+    return updatedJob;
+  }
+
   // ===========================================================================
   // GETTERS
   // ===========================================================================
@@ -391,3 +442,6 @@ export class TranscriptionQueue {
 // =============================================================================
 
 export const transcriptionQueue = new TranscriptionQueue();
+
+// Export Redis connection for reuse by other services
+export { redisConnection };

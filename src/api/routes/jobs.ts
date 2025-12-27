@@ -324,7 +324,7 @@ export async function jobRoutes(
     Body: { priority?: JobPriority; metadata?: any };
   }>('/jobs/:jobId', {
     schema: {
-      description: 'Update a job (metadata only, use /retry or DELETE for status changes)',
+      description: 'Update an existing job (priority and/or metadata).',
       tags: ['jobs'],
       params: {
         type: 'object',
@@ -339,17 +339,38 @@ export async function jobRoutes(
           priority: {
             type: 'number',
             enum: [1, 2, 3, 4],
-            description: 'Note: Priority changes not supported after job creation',
+            description: 'Update job priority. Cannot be updated if job is completed or failed.',
           },
           metadata: { type: 'object' },
         },
       },
       response: {
         200: {
+          description: 'Job updated successfully.',
           type: 'object',
           properties: {
             success: { type: 'boolean' },
             data: { type: 'object' },
+            timestamp: { type: 'string' },
+            requestId: { type: 'string' },
+          },
+        },
+        404: {
+          description: 'Job not found.',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', default: false },
+            error: { type: 'string' },
+            timestamp: { type: 'string' },
+            requestId: { type: 'string' },
+          },
+        },
+        409: {
+          description: 'Conflict, e.g., trying to update a completed job.',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', default: false },
+            error: { type: 'string' },
             timestamp: { type: 'string' },
             requestId: { type: 'string' },
           },
@@ -360,19 +381,18 @@ export async function jobRoutes(
     const { jobId } = request.params;
     const validated = JobUpdateSchema.parse(request.body);
 
+    // Ensure job exists before proceeding
     const job = await transcriptionQueue.getJob(jobId);
-
     if (!job) {
-      reply.code(404);
-      return {
+      return reply.code(404).send({
         success: false,
         error: 'Job not found',
         timestamp: new Date().toISOString(),
         requestId: request.id,
-      };
+      });
     }
 
-    // Update job data
+    // Update job metadata if provided
     if (validated.metadata) {
       await job.updateData({
         ...job.data,
@@ -383,14 +403,63 @@ export async function jobRoutes(
       });
     }
 
-    // TODO: Implement priority update
-    // BullMQ doesn't support changing priority after job creation
+    // Update job priority if provided
+    if (validated.priority) {
+      try {
+        await transcriptionQueue.updateJobPriority(jobId, validated.priority);
+      } catch (error: any) {
+        if (error.message.includes('not found')) {
+          return reply.code(404).send({
+            success: false,
+            error: `Job with ID ${jobId} not found`,
+            timestamp: new Date().toISOString(),
+            requestId: request.id,
+          });
+        }
+        if (error.message.includes('completed or failed')) {
+          return reply.code(409).send({
+            success: false,
+            error: 'Cannot update priority for a job that is already completed or failed.',
+            timestamp: new Date().toISOString(),
+            requestId: request.id,
+          });
+        }
+        fastify.log.error(error, `Failed to update priority for job ${jobId}`);
+        return reply.code(500).send({
+          success: false,
+          error: 'Internal server error while updating job priority.',
+          timestamp: new Date().toISOString(),
+          requestId: request.id,
+        });
+      }
+    }
+
+    // Refetch the job to return the updated details
+    const updatedJob = await transcriptionQueue.getJob(jobId);
+    if (!updatedJob) {
+      // This is unlikely, but a safeguard
+      return reply.code(404).send({
+        success: false,
+        error: 'Job not found after update.',
+        timestamp: new Date().toISOString(),
+        requestId: request.id,
+      });
+    }
 
     const response: ApiResponse = {
       success: true,
       data: {
-        jobId: job.id,
-        message: 'Job updated successfully',
+        jobId: updatedJob.id,
+        name: updatedJob.name,
+        data: updatedJob.data,
+        progress: updatedJob.progress,
+        attemptsMade: updatedJob.attemptsMade,
+        failedReason: updatedJob.failedReason,
+        stacktrace: updatedJob.stacktrace,
+        returnvalue: updatedJob.returnvalue,
+        finishedOn: updatedJob.finishedOn,
+        processedOn: updatedJob.processedOn,
+        timestamp: updatedJob.timestamp,
       },
       timestamp: new Date().toISOString(),
       requestId: request.id,
