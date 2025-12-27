@@ -65,15 +65,39 @@ jobs:
           
           echo "🔨 Building project..."
           npm run build
-          
+
+          echo "🧹 Cleaning up orphaned processes..."
+          # Kill any orphaned processes that might be blocking port 9003
+          pkill -f 'transcription-palantir/dist/index.js' || true
+          sleep 2
+
           echo "🔄 Restarting service..."
           sudo systemctl restart transcription-palantir
-          
+
           echo "⏳ Waiting for service to start..."
           sleep 5
-          
-          echo "✅ Verifying deployment..."
+
+          echo "🔍 Verifying service is running..."
+          # Check systemd service is actually active
+          if ! sudo systemctl is-active --quiet transcription-palantir; then
+            echo "❌ Service failed to start"
+            sudo systemctl status transcription-palantir --no-pager -l
+            exit 1
+          fi
+
+          echo "✅ Verifying deployment health..."
+          # Check health endpoint responds
           curl -f http://localhost:9003/api/v1/health || exit 1
+
+          echo "🕐 Verifying fresh deployment..."
+          # Verify uptime is recent (less than 60 seconds = fresh restart)
+          UPTIME=$(curl -s http://localhost:9003/api/v1/health | jq -r '.uptime')
+          if (( $(echo "$UPTIME > 60" | bc -l) )); then
+            echo "⚠️  WARNING: Service appears stale (uptime: ${UPTIME}s)"
+            echo "This might indicate the restart failed and old instance is still running"
+            exit 1
+          fi
+          echo "✅ Service is fresh (uptime: ${UPTIME}s)"
           
           echo "🎉 Deployment successful!"
         ENDSSH
