@@ -5,9 +5,24 @@
  */
 
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
+import { access, constants } from 'fs/promises';
 import { transcriptionQueue } from '../../services/queue.js';
+import { fileWatcher } from '../../services/file-watcher.js';
 import { appConfig } from '../../config/index.js';
 import type { SystemHealth, ServiceHealth } from '../../types/index.js';
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+async function checkDirectoryAccess(dirPath: string): Promise<boolean> {
+  try {
+    await access(dirPath, constants.R_OK | constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // =============================================================================
 // HEALTH ROUTES
@@ -84,11 +99,28 @@ export async function healthRoutes(
       });
     }
 
-    // TODO: Add more service checks
-    // - Redis connection
-    // - Worker availability
-    // - Disk space
-    // - File system access
+    // Check File Watcher Service
+    try {
+      const watcherRunning = fileWatcher.running;
+      const watchDirAccessible = await checkDirectoryAccess(appConfig.processing.watchDirectory);
+
+      services.push({
+        name: 'file_watcher',
+        status: (watcherRunning && watchDirAccessible) ? 'up' : 'down',
+        lastCheck: new Date().toISOString(),
+        metadata: {
+          watching: watcherRunning,
+          directoryAccessible: watchDirAccessible,
+        },
+      });
+    } catch (error) {
+      services.push({
+        name: 'file_watcher',
+        status: 'down',
+        lastCheck: new Date().toISOString(),
+        error: (error as Error).message,
+      });
+    }
 
     const allServicesUp = services.every(s => s.status === 'up');
     const statusCode = allServicesUp ? 200 : 503;
@@ -144,6 +176,39 @@ export async function healthRoutes(
         status: 'down',
         lastCheck: new Date().toISOString(),
         error: (error as Error).message,
+      });
+    }
+
+    // Check File Watcher Service
+    const watcherStartTime = Date.now();
+    try {
+      const watcherRunning = fileWatcher.running;
+      const watcherResponseTime = Date.now() - watcherStartTime;
+
+      // Verify watch directory is still accessible
+      const watchDirAccessible = await checkDirectoryAccess(appConfig.processing.watchDirectory);
+
+      services.push({
+        name: 'file_watcher',
+        status: (watcherRunning && watchDirAccessible) ? 'up' : 'down',
+        lastCheck: new Date().toISOString(),
+        responseTime: watcherResponseTime,
+        metadata: {
+          watching: watcherRunning,
+          directory: appConfig.processing.watchDirectory,
+          directoryAccessible: watchDirAccessible,
+          processedFiles: fileWatcher.processedCount,
+        },
+      });
+    } catch (error) {
+      services.push({
+        name: 'file_watcher',
+        status: 'down',
+        lastCheck: new Date().toISOString(),
+        error: (error as Error).message,
+        metadata: {
+          directory: appConfig.processing.watchDirectory,
+        },
       });
     }
 

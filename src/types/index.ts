@@ -117,6 +117,7 @@ export interface ServiceHealth {
   lastCheck: string;
   responseTime?: number;
   error?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface SystemMetrics {
