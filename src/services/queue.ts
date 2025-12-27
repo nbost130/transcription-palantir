@@ -270,16 +270,23 @@ export class TranscriptionQueue {
   }
 
   async getJobs(status: JobStatus, start = 0, end = 19) {
+    if (status === JobStatus.PENDING) {
+      const [delayedJobs, waitingJobs] = await Promise.all([
+        this.queue.getJobs(['delayed'], start, end),
+        this.queue.getJobs(['waiting'], start, end),
+      ]);
+      return [...delayedJobs, ...waitingJobs];
+    }
+
     const statusMap = {
-      [JobStatus.PENDING]: 'waiting',
       [JobStatus.PROCESSING]: 'active',
       [JobStatus.COMPLETED]: 'completed',
       [JobStatus.FAILED]: 'failed',
-      [JobStatus.CANCELLED]: 'failed', // Map cancelled to failed for BullMQ
+      [JobStatus.CANCELLED]: 'failed',
       [JobStatus.RETRYING]: 'waiting',
     } as const;
 
-    const bullStatus = statusMap[status];
+    const bullStatus = statusMap[status as keyof typeof statusMap];
     return this.queue.getJobs([bullStatus], start, end);
   }
 
