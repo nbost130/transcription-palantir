@@ -50,12 +50,15 @@ jobs:
       run: |
         ssh nbost@100.77.230.53 << 'ENDSSH'
           set -e
-          
+
           echo "📂 Navigating to project directory..."
           cd /home/nbost/transcription-palantir
-          
-          echo "📥 Pulling latest changes..."
-          git pull origin main
+
+          echo "🔍 Checking for divergent branches..."
+          git fetch origin
+
+          echo "🔄 Syncing with GitHub (using reset to handle divergence)..."
+          git reset --hard origin/main
           
           echo "📦 Installing dependencies..."
           npm install
