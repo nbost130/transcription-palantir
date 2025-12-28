@@ -61,7 +61,7 @@ export async function jobRoutes(
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            data: { type: 'object' },
+            data: { type: 'object', additionalProperties: true },
             timestamp: { type: 'string' },
             requestId: { type: 'string' },
           },
@@ -672,7 +672,7 @@ export async function jobRoutes(
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            data: { type: 'object' },
+            data: { type: 'object', additionalProperties: true },
             timestamp: { type: 'string' },
             requestId: { type: 'string' },
           },

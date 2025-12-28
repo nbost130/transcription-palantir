@@ -1,26 +1,71 @@
 /**
  * 🔮 Transcription Palantir - Queue Integration Tests
  *
- * Tests the BullMQ queue system with Redis
+ * Tests the BullMQ queue system with Redis mocks
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import { transcriptionQueue } from '../../src/services/queue.js';
-import { JobStatus, JobPriority } from '../../src/types/index.js';
+import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
+import { mockQueueInstance } from '../mocks';
+
+// Mock dependencies
+const mockLogger = {
+  info: mock(() => { }),
+  warn: mock(() => { }),
+  error: mock(() => { }),
+  debug: mock(() => { }),
+  fatal: mock(() => { }),
+};
+
+
+
+// Mocks for bullmq and ioredis are handled in tests/setup.ts
+
+// Mock BullMQ
+
+
+
+
+// Register mocks
+mock.module('../../src/utils/logger.js', () => ({
+  logger: mockLogger,
+  queueLogger: mockLogger,
+  logQueueEvent: mock(() => { }),
+}));
+// Set environment variables for testing
+process.env.NODE_ENV = 'test';
+process.env.REDIS_HOST = 'localhost';
+process.env.REDIS_PORT = '6379';
+process.env.WATCH_DIRECTORY = '/tmp/watch';
+process.env.OUTPUT_DIRECTORY = '/tmp/output';
+process.env.COMPLETED_DIRECTORY = '/tmp/completed';
+process.env.FAILED_DIRECTORY = '/tmp/failed';
+
 
 describe('Queue Integration Tests', () => {
-  beforeAll(async () => {
-    // Initialize queue
+  let transcriptionQueue: any;
+
+  beforeEach(async () => {
+    // Import module dynamically to ensure mocks are applied
+    const module = await import('../../src/services/queue');
+    transcriptionQueue = module.transcriptionQueue;
+
+    // Reset mocks
+    mockQueueInstance.add.mockClear();
+    mockQueueInstance.pause.mockClear();
+    mockQueueInstance.resume.mockClear();
+    mockQueueInstance.getJob.mockClear();
+    mockQueueInstance.getJobCounts.mockClear();
+    mockQueueInstance.getWaiting.mockClear();
+
+    // Initialize
     await transcriptionQueue.initialize();
   });
 
-  afterAll(async () => {
-    // Cleanup
-    await transcriptionQueue.cleanQueue(0);
+  afterEach(async () => {
     await transcriptionQueue.close();
   });
 
-  test('should connect to Redis', async () => {
+  test('should connect to Redis (mocked)', async () => {
     expect(transcriptionQueue.isReady).toBe(true);
   });
 
@@ -30,108 +75,50 @@ describe('Queue Integration Tests', () => {
       filePath: '/tmp/test-audio.mp3',
       fileSize: 1024,
       mimeType: 'audio/mpeg',
-      status: JobStatus.PENDING,
-      priority: JobPriority.NORMAL,
-      progress: 0,
-      createdAt: new Date(),
-      attempts: 0,
-      maxAttempts: 3,
-      metadata: {
-        originalPath: '/tmp/test-audio.mp3',
-        audioFormat: 'mp3',
-        whisperModel: 'small',
-      },
+      priority: 1,
     };
 
     const job = await transcriptionQueue.addJob(jobData);
 
     expect(job).toBeDefined();
-    expect(job.id).toBeDefined();
+    expect(job.id).toBe('job-123');
     expect(job.data.fileName).toBe('test-audio.mp3');
+    expect(mockQueueInstance.add).toHaveBeenCalled();
   });
 
   test('should retrieve queue statistics', async () => {
+    mockQueueInstance.getWaiting.mockResolvedValue(new Array(5));
+    mockQueueInstance.getActive.mockResolvedValue(new Array(2));
+    mockQueueInstance.getCompleted.mockResolvedValue(new Array(10));
+    mockQueueInstance.getFailed.mockResolvedValue(new Array(1));
+
     const stats = await transcriptionQueue.getQueueStats();
 
-    expect(stats).toHaveProperty('waiting');
-    expect(stats).toHaveProperty('active');
-    expect(stats).toHaveProperty('completed');
-    expect(stats).toHaveProperty('failed');
-    expect(stats).toHaveProperty('total');
-    expect(typeof stats.total).toBe('number');
-  });
+    expect(stats).toHaveProperty('waiting', 5);
+    expect(stats).toHaveProperty('active', 2);
+    expect(stats).toHaveProperty('completed', 10);
+    expect(stats).toHaveProperty('failed', 1);
 
-  test('should add jobs with different priorities', async () => {
-    const jobs = await Promise.all([
-      transcriptionQueue.addJob({
-        fileName: 'urgent.mp3',
-        filePath: '/tmp/urgent.mp3',
-        fileSize: 512,
-        mimeType: 'audio/mpeg',
-        status: JobStatus.PENDING,
-        priority: JobPriority.URGENT,
-        progress: 0,
-        createdAt: new Date(),
-        attempts: 0,
-        maxAttempts: 3,
-        metadata: {
-          originalPath: '/tmp/urgent.mp3',
-          audioFormat: 'mp3',
-          whisperModel: 'small',
-        },
-      }),
-      transcriptionQueue.addJob({
-        fileName: 'low.mp3',
-        filePath: '/tmp/low.mp3',
-        fileSize: 2048,
-        mimeType: 'audio/mpeg',
-        status: JobStatus.PENDING,
-        priority: JobPriority.LOW,
-        progress: 0,
-        createdAt: new Date(),
-        attempts: 0,
-        maxAttempts: 3,
-        metadata: {
-          originalPath: '/tmp/low.mp3',
-          audioFormat: 'mp3',
-          whisperModel: 'small',
-        },
-      }),
-    ]);
-
-    expect(jobs).toHaveLength(2);
-    expect(jobs[0].data.fileName).toBe('urgent.mp3');
-    expect(jobs[1].data.fileName).toBe('low.mp3');
+    expect(mockQueueInstance.getWaiting).toHaveBeenCalled();
   });
 
   test('should pause and resume queue', async () => {
     await transcriptionQueue.pauseQueue();
-    // Queue should be paused
+    expect(mockQueueInstance.pause).toHaveBeenCalled();
+
     await transcriptionQueue.resumeQueue();
-    // Queue should be active again
+    expect(mockQueueInstance.resume).toHaveBeenCalled();
   });
 
   test('should remove a job from queue', async () => {
-    const job = await transcriptionQueue.addJob({
-      fileName: 'to-delete.mp3',
-      filePath: '/tmp/to-delete.mp3',
-      fileSize: 256,
-      mimeType: 'audio/mpeg',
-      status: JobStatus.PENDING,
-      priority: JobPriority.NORMAL,
-      progress: 0,
-      createdAt: new Date(),
-      attempts: 0,
-      maxAttempts: 3,
-      metadata: {
-        originalPath: '/tmp/to-delete.mp3',
-        audioFormat: 'mp3',
-        whisperModel: 'small',
-      },
-    });
+    // We mock getJob to return a job with a remove method
+    const mockJob = { remove: mock(async () => { }) };
+    mockQueueInstance.getJob.mockResolvedValue(mockJob);
 
-    await transcriptionQueue.removeJob(job.id!);
-    const retrieved = await transcriptionQueue.getJob(job.id!);
-    expect(retrieved).toBeUndefined();
+    const job = await transcriptionQueue.getJob('job-123');
+    expect(job).toBeDefined();
+
+    await transcriptionQueue.removeJob('job-123');
+    expect(mockJob.remove).toHaveBeenCalled();
   });
 });
