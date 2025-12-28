@@ -271,11 +271,25 @@ export class TranscriptionQueue {
 
   async getJobs(status: JobStatus, start = 0, end = 19) {
     if (status === JobStatus.PENDING) {
+      // For pending jobs, we need to combine delayed and waiting queues
+      // but respect the pagination limits
+      const limit = end - start + 1;
+
+      // Get jobs from both queues with generous limits
       const [delayedJobs, waitingJobs] = await Promise.all([
-        this.queue.getJobs(['delayed'], start, end),
-        this.queue.getJobs(['waiting'], start, end),
+        this.queue.getJobs(['delayed'], 0, Math.max(end * 2, 100)),
+        this.queue.getJobs(['waiting'], 0, Math.max(end * 2, 100)),
       ]);
-      return [...delayedJobs, ...waitingJobs];
+
+      // Combine and sort by timestamp (newer first)
+      const combined = [...delayedJobs, ...waitingJobs].sort((a, b) => {
+        const aTime = a.timestamp || 0;
+        const bTime = b.timestamp || 0;
+        return bTime - aTime;
+      });
+
+      // Apply pagination to the combined result
+      return combined.slice(start, end + 1);
     }
 
     const statusMap = {
