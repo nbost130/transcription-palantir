@@ -625,6 +625,10 @@ export async function jobRoutes(
         },
         required: ['jobId'],
       },
+      body: {
+        type: 'object',
+        additionalProperties: false,
+      },
       response: {
         200: {
           type: 'object',
