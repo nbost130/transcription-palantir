@@ -399,23 +399,18 @@ export class TranscriptionQueue {
     if (await job.isDelayed()) {
       const newDelay = this.calculateDelay(priority);
       const jobData = { ...job.data, priority };
-      const jobOpts = {
-        ...job.opts,
-        priority,
-        delay: newDelay,
-      };
 
       // Remove the existing delayed job first
       await job.remove();
 
       // Add the job back with new priority and delay
-      // Use the same job ID to maintain continuity
+      // BullMQ will generate a new job ID, but job data is preserved
       await this.queue.add(
         job.name,
         jobData,
         {
-          ...jobOpts,
-          jobId,
+          priority,
+          delay: newDelay,
         },
       );
     } else {
