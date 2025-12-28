@@ -699,6 +699,10 @@ export async function jobRoutes(
   fastify.post('/queue/clean-failed', {
     schema: {
       description: 'Clean failed jobs from queue history',
+      body: {
+        type: 'object',
+        additionalProperties: false,
+      },
       tags: ['queue'],
       response: {
         200: {
