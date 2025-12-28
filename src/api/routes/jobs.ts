@@ -404,9 +404,10 @@ export async function jobRoutes(
     }
 
     // Update job priority if provided
+    let updatedJob = job;
     if (validated.priority) {
       try {
-        await transcriptionQueue.updateJobPriority(jobId, validated.priority);
+        updatedJob = await transcriptionQueue.updateJobPriority(jobId, validated.priority);
       } catch (error: any) {
         if (error.message.includes('not found')) {
           return reply.code(404).send({
@@ -432,10 +433,14 @@ export async function jobRoutes(
           requestId: request.id,
         });
       }
+    } else {
+      // If priority wasn't updated, refetch to get latest metadata
+      const refetchedJob = await transcriptionQueue.getJob(jobId);
+      if (refetchedJob) {
+        updatedJob = refetchedJob;
+      }
     }
 
-    // Refetch the job to return the updated details
-    const updatedJob = await transcriptionQueue.getJob(jobId);
     if (!updatedJob) {
       // This is unlikely, but a safeguard
       return reply.code(404).send({

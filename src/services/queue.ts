@@ -393,33 +393,35 @@ export class TranscriptionQueue {
     }
 
     const oldPriority = job.data.priority;
-    const isDelayed = await job.isDelayed();
-    const isWaiting = await job.isWaiting();
     const isActive = await job.isActive();
 
     queueLogger.info({
       jobId,
       oldPriority,
       newPriority: priority,
-      isDelayed,
-      isWaiting,
       isActive
     }, 'Starting priority update');
 
-    // Logic differs for delayed jobs as priority and delay must be updated
-    // by removing and re-adding the job
-    if (isDelayed) {
+    if (isActive) {
+      // For active (processing) jobs, just update the data priority
+      // We can't change the priority of a job that's already being processed
+      queueLogger.info({ jobId, oldPriority, newPriority: priority }, 'Job is active, updating data priority only');
+      await job.updateData({ ...job.data, priority });
+      queueLogger.info({ jobId, priority }, 'Data priority updated for active job');
+    } else {
+      // For ALL pending jobs (waiting, delayed, paused), use remove + re-add
+      // BullMQ's changePriority() has issues with jobs that have been retried
       const newDelay = this.calculateDelay(priority);
       const jobData = { ...job.data, priority };
 
-      queueLogger.info({ jobId, oldPriority, newPriority: priority, delay: newDelay }, 'Updating delayed job priority (remove + re-add)');
+      queueLogger.info({ jobId, oldPriority, newPriority: priority, delay: newDelay }, 'Updating pending job priority (remove + re-add)');
 
-      // Remove the existing delayed job first
+      // Remove the existing job first
       await job.remove();
-      queueLogger.info({ jobId }, 'Delayed job removed');
+      queueLogger.info({ jobId }, 'Job removed');
 
       // Add the job back with new priority and delay
-      // BullMQ will generate a new job ID, but job data is preserved
+      // BullMQ will generate a new job ID
       const newJob = await this.queue.add(
         job.name,
         jobData,
@@ -428,13 +430,10 @@ export class TranscriptionQueue {
           delay: newDelay,
         },
       );
-      queueLogger.info({ oldJobId: jobId, newJobId: newJob.id, priority, delay: newDelay }, 'Delayed job re-added with new priority');
-    } else {
-      // For non-delayed jobs (waiting, active), use changePriority
-      queueLogger.info({ jobId, oldPriority, newPriority: priority, isWaiting, isActive }, 'Updating waiting/active job priority (changePriority)');
-      await job.changePriority({ priority });
-      await job.updateData({ ...job.data, priority });
-      queueLogger.info({ jobId, priority }, 'Priority updated via changePriority');
+      queueLogger.info({ oldJobId: jobId, newJobId: newJob.id, priority, delay: newDelay }, 'Job re-added with new priority');
+
+      // Update the jobId for the return value
+      jobId = newJob.id!;
     }
 
     logQueueEvent('job_priority_updated', {
