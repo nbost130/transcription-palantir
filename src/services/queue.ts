@@ -393,18 +393,30 @@ export class TranscriptionQueue {
     }
 
     const oldPriority = job.data.priority;
+    const isDelayed = await job.isDelayed();
+    const isWaiting = await job.isWaiting();
+    const isActive = await job.isActive();
+
+    queueLogger.info({
+      jobId,
+      oldPriority,
+      newPriority: priority,
+      isDelayed,
+      isWaiting,
+      isActive
+    }, 'Starting priority update');
 
     // Logic differs for delayed jobs as priority and delay must be updated
     // by removing and re-adding the job
-    if (await job.isDelayed()) {
+    if (isDelayed) {
       const newDelay = this.calculateDelay(priority);
       const jobData = { ...job.data, priority };
 
-      queueLogger.debug({ jobId, oldPriority, newPriority: priority, delay: newDelay }, 'Updating delayed job priority');
+      queueLogger.info({ jobId, oldPriority, newPriority: priority, delay: newDelay }, 'Updating delayed job priority (remove + re-add)');
 
       // Remove the existing delayed job first
       await job.remove();
-      queueLogger.debug({ jobId }, 'Delayed job removed');
+      queueLogger.info({ jobId }, 'Delayed job removed');
 
       // Add the job back with new priority and delay
       // BullMQ will generate a new job ID, but job data is preserved
@@ -419,8 +431,10 @@ export class TranscriptionQueue {
       queueLogger.info({ oldJobId: jobId, newJobId: newJob.id, priority, delay: newDelay }, 'Delayed job re-added with new priority');
     } else {
       // For non-delayed jobs (waiting, active), use changePriority
+      queueLogger.info({ jobId, oldPriority, newPriority: priority, isWaiting, isActive }, 'Updating waiting/active job priority (changePriority)');
       await job.changePriority({ priority });
       await job.updateData({ ...job.data, priority });
+      queueLogger.info({ jobId, priority }, 'Priority updated via changePriority');
     }
 
     logQueueEvent('job_priority_updated', {

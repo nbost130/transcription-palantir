@@ -14,6 +14,7 @@ import { appConfig, getRedisUrl, getWhisperCommand } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { whisperService } from '../services/whisper.js';
 import { fasterWhisperService } from '../services/faster-whisper.js';
+import { fileTracker } from '../services/file-tracker.js';
 import type { TranscriptionJob } from '../types/index.js';
 
 // =============================================================================
@@ -131,7 +132,7 @@ export class TranscriptionWorker {
       );
     });
 
-    this.worker.on('failed', (job: Job | undefined, error: Error) => {
+    this.worker.on('failed', async (job: Job | undefined, error: Error) => {
       this.failedJobs++;
       logger.error(
         {
@@ -142,6 +143,12 @@ export class TranscriptionWorker {
         },
         '❌ Job failed'
       );
+
+      // Unmark file as processed so it can be retried
+      if (job?.data.filePath) {
+        await fileTracker.unmarkProcessed(job.data.filePath);
+        logger.debug({ filePath: job.data.filePath }, 'Unmarked failed file for retry');
+      }
     });
 
     this.worker.on('active', (job: Job) => {

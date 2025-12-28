@@ -11,6 +11,7 @@ import { basename, extname, join } from 'path';
 import { logger } from '../utils/logger.js';
 import { appConfig } from '../config/index.js';
 import { transcriptionQueue } from './queue.js';
+import { fileTracker } from './file-tracker.js';
 import { JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js';
 import { randomUUID } from 'crypto';
 import { getMimeType } from '../utils/file.js';
@@ -35,6 +36,9 @@ export class FileWatcherService {
     }
 
     try {
+      // Connect file tracker
+      await fileTracker.connect();
+
       // Verify watch directory exists and is accessible
       await this.verifyDirectory(appConfig.processing.watchDirectory);
 
@@ -133,8 +137,16 @@ export class FileWatcherService {
 
   private async handleFileAdded(filePath: string): Promise<void> {
     try {
-      // Skip if already processed
+      // Skip if already processed (check both in-memory and persistent storage)
       if (this.processedFiles.has(filePath)) {
+        return;
+      }
+
+      // Check persistent storage for duplicate detection across restarts
+      const alreadyProcessed = await fileTracker.isProcessed(filePath);
+      if (alreadyProcessed) {
+        logger.debug({ filePath }, 'File already processed (found in persistent storage), skipping');
+        this.processedFiles.add(filePath); // Add to in-memory cache
         return;
       }
 
@@ -158,7 +170,7 @@ export class FileWatcherService {
         await this.createJobForFile(filePath, validation.metadata);
       }
 
-      // Mark as processed
+      // Mark as processed (both in-memory and persistent)
       this.processedFiles.add(filePath);
     } catch (error) {
       logger.error(
@@ -258,8 +270,9 @@ export class FileWatcherService {
 
   private async createJobForFile(filePath: string, metadata: FileMetadata): Promise<void> {
     try {
+      const jobId = randomUUID();
       const jobData: Partial<TranscriptionJob> = {
-        id: randomUUID(),
+        id: jobId,
         fileName: metadata.fileName,
         filePath,
         fileSize: metadata.fileSize,
@@ -279,6 +292,9 @@ export class FileWatcherService {
       };
 
       const job = await transcriptionQueue.addJob(jobData);
+
+      // Mark file as processed in persistent storage
+      await fileTracker.markProcessed(filePath, jobId);
 
       logger.info(
         {

@@ -10,6 +10,8 @@ import { transcriptionQueue } from './services/queue.js';
 import { apiServer } from './api/server.js';
 import { fileWatcher } from './services/file-watcher.js';
 import { transcriptionWorker } from './workers/transcription-worker.js';
+import { processGuard } from './services/process-guard.js';
+import { fileTracker } from './services/file-tracker.js';
 
 // =============================================================================
 // APPLICATION CLASS
@@ -34,6 +36,14 @@ class TranscriptionPalantir {
         port: appConfig.port,
         nodeVersion: process.version,
       }, '🔮 Starting Transcription Palantir...');
+
+      // Check for existing instances before starting (disabled for now - causing issues)
+      // const canStart = await processGuard.checkForExistingInstance();
+      // if (!canStart) {
+      //   logger.error('🚨 Cannot start - another instance is already running');
+      //   logger.error('💡 To kill rogue processes, run: systemctl --user stop transcription-palantir && pkill -9 -f "bun.*transcription-palantir"');
+      //   process.exit(1);
+      // }
 
       // Initialize core services
       await this.initializeServices();
@@ -91,11 +101,13 @@ class TranscriptionPalantir {
   private async closeServices(): Promise<void> {
     logger.info('Closing services...');
 
+    // Close file tracker
+    await fileTracker.disconnect();
+    logger.info('✅ File tracker closed');
+
     // Close queue service
     await transcriptionQueue.close();
     logger.info('✅ Queue service closed');
-
-    // TODO: Close other services
   }
 
   // ===========================================================================
