@@ -155,6 +155,16 @@ function validateConfig(config: AppConfig): void {
     config.processing.failedDirectory,
   ];
 
+  // Check for wrong OS paths (prevents macOS paths on Linux and vice versa)
+  for (const dir of directories) {
+    if (process.platform === 'linux' && dir.startsWith('/Users')) {
+      errors.push(`Invalid macOS path on Linux: ${dir}`);
+    }
+    if (process.platform === 'darwin' && dir.startsWith('/mnt')) {
+      errors.push(`Invalid Linux path on macOS: ${dir}`);
+    }
+  }
+
   // Additional validation logic can be added here
   if (config.processing.maxWorkers < config.processing.minWorkers) {
     errors.push('MAX_WORKERS must be greater than or equal to MIN_WORKERS');
