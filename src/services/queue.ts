@@ -395,22 +395,31 @@ export class TranscriptionQueue {
     const oldPriority = job.data.priority;
 
     // Logic differs for delayed jobs as priority and delay must be updated
-    // by re-adding the job. For other states, we can change priority directly.
+    // by removing and re-adding the job
     if (await job.isDelayed()) {
       const newDelay = this.calculateDelay(priority);
-      // Re-adding the job with the same ID, new priority, and new delay
-      // effectively updates the existing delayed job.
+      const jobData = { ...job.data, priority };
+      const jobOpts = {
+        ...job.opts,
+        priority,
+        delay: newDelay,
+      };
+
+      // Remove the existing delayed job first
+      await job.remove();
+
+      // Add the job back with new priority and delay
+      // Use the same job ID to maintain continuity
       await this.queue.add(
         job.name,
-        { ...job.data, priority }, // Update priority in data payload
+        jobData,
         {
-          ...job.opts,
-          ...(job.id && { jobId: job.id }),
-          priority,
-          delay: newDelay,
+          ...jobOpts,
+          jobId,
         },
       );
     } else {
+      // For non-delayed jobs (waiting, active), use changePriority
       await job.changePriority({ priority });
       await job.updateData({ ...job.data, priority });
     }
