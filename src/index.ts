@@ -4,14 +4,14 @@
  * Modern TypeScript transcription system with BullMQ, Redis, and Whisper.cpp
  */
 
-import { logger, logFatalError } from './utils/logger.js';
-import { appConfig } from './config/index.js';
-import { transcriptionQueue } from './services/queue.js';
 import { apiServer } from './api/server.js';
-import { fileWatcher } from './services/file-watcher.js';
-import { transcriptionWorker } from './workers/transcription-worker.js';
-import { processGuard } from './services/process-guard.js';
+import { appConfig } from './config/index.js';
 import { fileTracker } from './services/file-tracker.js';
+import { fileWatcher } from './services/file-watcher.js';
+import { processGuard } from './services/process-guard.js';
+import { transcriptionQueue } from './services/queue.js';
+import { logFatalError, logger } from './utils/logger.js';
+import { transcriptionWorker } from './workers/transcription-worker.js';
 
 // =============================================================================
 // APPLICATION CLASS
@@ -30,12 +30,15 @@ class TranscriptionPalantir {
 
   async start(): Promise<void> {
     try {
-      logger.info({
-        version: process.env.npm_package_version || '1.0.0',
-        environment: appConfig.env,
-        port: appConfig.port,
-        nodeVersion: process.version,
-      }, '🔮 Starting Transcription Palantir...');
+      logger.info(
+        {
+          version: process.env.npm_package_version || '1.0.0',
+          environment: appConfig.env,
+          port: appConfig.port,
+          nodeVersion: process.version,
+        },
+        '🔮 Starting Transcription Palantir...'
+      );
 
       // Check for existing instances before starting (disabled for now - causing issues)
       // const canStart = await processGuard.checkForExistingInstance();
@@ -55,7 +58,6 @@ class TranscriptionPalantir {
 
       // Log configuration summary
       this.logConfigurationSummary();
-
     } catch (error) {
       logFatalError(error as Error, { component: 'startup' });
       process.exit(1);
@@ -174,21 +176,27 @@ class TranscriptionPalantir {
 
     // Handle unhandled promise rejections
     process.on('unhandledRejection', (reason, promise) => {
-      logger.fatal({
-        reason,
-        promise,
-        component: 'unhandledRejection',
-      }, 'Unhandled promise rejection');
+      logger.fatal(
+        {
+          reason,
+          promise,
+          component: 'unhandledRejection',
+        },
+        'Unhandled promise rejection'
+      );
       process.exit(1);
     });
 
     // Log process warnings
     process.on('warning', (warning) => {
-      logger.warn({
-        name: warning.name,
-        message: warning.message,
-        stack: warning.stack,
-      }, 'Process warning');
+      logger.warn(
+        {
+          name: warning.name,
+          message: warning.message,
+          stack: warning.stack,
+        },
+        'Process warning'
+      );
     });
   }
 
@@ -197,24 +205,27 @@ class TranscriptionPalantir {
   // ===========================================================================
 
   private logConfigurationSummary(): void {
-    logger.info({
-      redis: {
-        host: appConfig.redis.host,
-        port: appConfig.redis.port,
-        db: appConfig.redis.db,
+    logger.info(
+      {
+        redis: {
+          host: appConfig.redis.host,
+          port: appConfig.redis.port,
+          db: appConfig.redis.db,
+        },
+        processing: {
+          watchDirectory: appConfig.processing.watchDirectory,
+          outputDirectory: appConfig.processing.outputDirectory,
+          maxWorkers: appConfig.processing.maxWorkers,
+          supportedFormats: appConfig.processing.supportedFormats,
+        },
+        whisper: {
+          model: appConfig.whisper.model,
+          computeType: appConfig.whisper.computeType,
+          language: appConfig.whisper.language,
+        },
       },
-      processing: {
-        watchDirectory: appConfig.processing.watchDirectory,
-        outputDirectory: appConfig.processing.outputDirectory,
-        maxWorkers: appConfig.processing.maxWorkers,
-        supportedFormats: appConfig.processing.supportedFormats,
-      },
-      whisper: {
-        model: appConfig.whisper.model,
-        computeType: appConfig.whisper.computeType,
-        language: appConfig.whisper.language,
-      },
-    }, 'Configuration summary');
+      'Configuration summary'
+    );
   }
 }
 

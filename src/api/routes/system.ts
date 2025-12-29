@@ -4,9 +4,9 @@
  * API endpoints for system information and configuration
  */
 
-import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { whisperService } from '../../services/whisper.js';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { appConfig } from '../../config/index.js';
+import { whisperService } from '../../services/whisper.js';
 import { logger } from '../../utils/logger.js';
 
 // =============================================================================

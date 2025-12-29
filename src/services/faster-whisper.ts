@@ -5,9 +5,9 @@
  */
 
 import { spawn } from 'child_process';
-import { access, mkdir, readFile, writeFile } from 'fs/promises';
 import { constants } from 'fs';
-import { join, dirname, basename, extname } from 'path';
+import { access, mkdir, readFile, writeFile } from 'fs/promises';
+import { basename, dirname, extname, join } from 'path';
 import { appConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
@@ -80,12 +80,15 @@ export class FasterWhisperService {
     // Build command arguments
     const args = this.buildPythonArgs(inputFile, outputFile, options);
 
-    logger.info({
-      inputFile,
-      outputFile,
-      model: options.model || 'large-v3',
-      device: options.device || 'cpu',
-    }, 'Starting faster-whisper transcription');
+    logger.info(
+      {
+        inputFile,
+        outputFile,
+        model: options.model || 'large-v3',
+        device: options.device || 'cpu',
+      },
+      'Starting faster-whisper transcription'
+    );
 
     try {
       // Run faster-whisper Python script (file growth monitor detects stuck processes)
@@ -106,18 +109,19 @@ export class FasterWhisperService {
   /**
    * Build Python script arguments
    */
-  private buildPythonArgs(
-    inputFile: string,
-    outputFile: string,
-    options: FasterWhisperOptions
-  ): string[] {
+  private buildPythonArgs(inputFile: string, outputFile: string, options: FasterWhisperOptions): string[] {
     const args = [
       this.scriptPath,
-      '--input', inputFile,
-      '--output', outputFile,
-      '--model', options.model || 'large-v3',
-      '--device', options.device || 'cpu',
-      '--compute_type', options.computeType || 'float16',
+      '--input',
+      inputFile,
+      '--output',
+      outputFile,
+      '--model',
+      options.model || 'large-v3',
+      '--device',
+      options.device || 'cpu',
+      '--compute_type',
+      options.computeType || 'float16',
     ];
 
     if (options.language && options.language !== 'auto') {
@@ -203,7 +207,7 @@ export class FasterWhisperService {
     try {
       const content = await readFile(outputFile, 'utf-8');
       const json = JSON.parse(content);
-      
+
       return {
         text: json.text || '',
         segments: json.segments || [],
@@ -215,8 +219,6 @@ export class FasterWhisperService {
       throw new Error(`Failed to read transcription output: ${(error as Error).message}`);
     }
   }
-
-
 }
 
 export const fasterWhisperService = new FasterWhisperService();

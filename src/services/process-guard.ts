@@ -7,8 +7,8 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { logger } from '../utils/logger.js';
 import { appConfig } from '../config/index.js';
+import { logger } from '../utils/logger.js';
 
 const execAsync = promisify(exec);
 
@@ -28,21 +28,15 @@ export class ProcessGuardService {
 
       if (portInUse) {
         const processInfo = await this.getProcessOnPort(appConfig.port);
-        logger.error(
-          { port: appConfig.port, processInfo },
-          '🚨 Port already in use by another process'
-        );
+        logger.error({ port: appConfig.port, processInfo }, '🚨 Port already in use by another process');
         return false;
       }
 
       // Check for other bun processes running this service
       const existingProcesses = await this.findExistingProcesses();
-      
+
       if (existingProcesses.length > 0) {
-        logger.error(
-          { processes: existingProcesses },
-          '🚨 Found existing service processes'
-        );
+        logger.error({ processes: existingProcesses }, '🚨 Found existing service processes');
         return false;
       }
 
@@ -140,9 +134,7 @@ export class ProcessGuardService {
     try {
       // Find bun processes running our service (excluding current process)
       const currentPid = process.pid;
-      const { stdout } = await execAsync(
-        `ps aux | grep "bun.*transcription-palantir.*dist/index.js" | grep -v grep`
-      );
+      const { stdout } = await execAsync(`ps aux | grep "bun.*transcription-palantir.*dist/index.js" | grep -v grep`);
 
       if (!stdout.trim()) {
         return [];
@@ -174,10 +166,7 @@ export class ProcessGuardService {
           const ppid = parseInt(ppidStr || '0');
 
           processes.push({ pid, ppid, cmd });
-        } catch {
-          // Skip if we can't get PPID
-          continue;
-        }
+        } catch {}
       }
 
       return processes;
@@ -207,4 +196,3 @@ interface ProcessInfo {
 // =============================================================================
 
 export const processGuard = new ProcessGuardService();
-

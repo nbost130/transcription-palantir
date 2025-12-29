@@ -5,9 +5,9 @@
  * across service restarts and ensure idempotent file processing.
  */
 
-import type { Redis } from 'ioredis';
 import { createHash } from 'crypto';
 import { stat } from 'fs/promises';
+import type { Redis } from 'ioredis';
 import { logger } from '../utils/logger.js';
 import { redisConnection } from './queue.js';
 
@@ -230,4 +230,3 @@ interface ProcessedFileMetadata {
 // =============================================================================
 
 export const fileTracker = new FileTrackerService();
-

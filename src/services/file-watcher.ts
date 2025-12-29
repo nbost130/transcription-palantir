@@ -5,16 +5,16 @@
  */
 
 import chokidar from 'chokidar';
-import { stat, access, readdir } from 'fs/promises';
-import { constants } from 'fs';
-import { basename, extname, join } from 'path';
-import { logger } from '../utils/logger.js';
-import { appConfig } from '../config/index.js';
-import { transcriptionQueue } from './queue.js';
-import { fileTracker } from './file-tracker.js';
-import { JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js';
 import { randomUUID } from 'crypto';
+import { constants } from 'fs';
+import { access, readdir, stat } from 'fs/promises';
+import { basename, extname, join } from 'path';
+import { appConfig } from '../config/index.js';
+import { JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js';
 import { getMimeType } from '../utils/file.js';
+import { logger } from '../utils/logger.js';
+import { fileTracker } from './file-tracker.js';
+import { transcriptionQueue } from './queue.js';
 
 // =============================================================================
 // FILE WATCHER SERVICE
@@ -44,7 +44,7 @@ export class FileWatcherService {
 
       // Create watcher
       this.watcher = chokidar.watch(appConfig.processing.watchDirectory, {
-        ignored: /(^|[\/\\])\../, // Ignore dotfiles
+        ignored: /(^|[/\\])\../, // Ignore dotfiles
         persistent: true,
         ignoreInitial: false, // Process existing files on startup
         awaitWriteFinish: {
@@ -342,7 +342,11 @@ export class FileWatcherService {
     }
   }
 
-  private async scanDirectoryRecursively(dirPath: string, maxDepth: number = 3, currentDepth: number = 0): Promise<string[]> {
+  private async scanDirectoryRecursively(
+    dirPath: string,
+    maxDepth: number = 3,
+    currentDepth: number = 0
+  ): Promise<string[]> {
     const foundFiles: string[] = [];
 
     if (currentDepth >= maxDepth) {

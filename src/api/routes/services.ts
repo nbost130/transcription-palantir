@@ -1,5 +1,5 @@
-import { FastifyInstance } from 'fastify';
 import axios from 'axios';
+import type { FastifyInstance } from 'fastify';
 
 interface ServiceDetails {
   name: string;
@@ -52,12 +52,7 @@ const DOCKER_PORT_MAPPING: Record<string, { externalPort: number; healthEndpoint
 };
 
 // Services to exclude from monitoring (internal Consul ports, etc.)
-const EXCLUDED_SERVICES = [
-  'consul-8301',
-  'consul-8302',
-  'consul-8600',
-  'consul',
-];
+const EXCLUDED_SERVICES = ['consul-8301', 'consul-8302', 'consul-8600', 'consul'];
 
 const CONSUL_URL = 'http://100.77.230.53:8500';
 const HOST_IP = '100.77.230.53';
@@ -107,8 +102,11 @@ async function checkServiceHealth(service: ConsulService): Promise<ServiceDetail
     return null as any; // Will be filtered out
   }
 
-  const displayName = service.Meta?.displayName ||
-    service.Service.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  const displayName =
+    service.Meta?.displayName ||
+    service.Service.split('-')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
 
   try {
     // TCP check for Redis
@@ -192,104 +190,108 @@ async function checkServiceHealth(service: ConsulService): Promise<ServiceDetail
 }
 
 export default async function servicesRoutes(fastify: FastifyInstance) {
-  fastify.get('/api/services/health', {
-    schema: {
-      description: 'Check health status of all Mithrandir services (Consul-integrated)',
-      tags: ['services'],
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: {
-              type: 'object',
-              properties: {
-                services: {
-                  type: 'array',
-                  items: {
+  fastify.get(
+    '/api/services/health',
+    {
+      schema: {
+        description: 'Check health status of all Mithrandir services (Consul-integrated)',
+        tags: ['services'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              data: {
+                type: 'object',
+                properties: {
+                  services: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        name: { type: 'string' },
+                        identifier: { type: 'string' },
+                        status: { type: 'string', enum: ['healthy', 'unhealthy'] },
+                        url: { type: 'string' },
+                        port: { type: 'number' },
+                        uptime: { type: 'number' },
+                        version: { type: 'string' },
+                        error: { type: 'string' },
+                        details: { type: 'object' },
+                        lastChecked: { type: 'string' },
+                      },
+                    },
+                  },
+                  summary: {
                     type: 'object',
                     properties: {
-                      name: { type: 'string' },
-                      identifier: { type: 'string' },
-                      status: { type: 'string', enum: ['healthy', 'unhealthy'] },
-                      url: { type: 'string' },
-                      port: { type: 'number' },
-                      uptime: { type: 'number' },
-                      version: { type: 'string' },
-                      error: { type: 'string' },
-                      details: { type: 'object' },
-                      lastChecked: { type: 'string' },
+                      total: { type: 'number' },
+                      healthy: { type: 'number' },
+                      unhealthy: { type: 'number' },
+                      healthPercentage: { type: 'number' },
                     },
                   },
                 },
-                summary: {
-                  type: 'object',
-                  properties: {
-                    total: { type: 'number' },
-                    healthy: { type: 'number' },
-                    unhealthy: { type: 'number' },
-                    healthPercentage: { type: 'number' },
-                  },
-                },
               },
+              timestamp: { type: 'string' },
             },
-            timestamp: { type: 'string' },
           },
         },
       },
     },
-  }, async (request, reply) => {
-    try {
-      // Fetch all services from Consul
-      const consulServices = await fetchConsulServices();
+    async (request, reply) => {
+      try {
+        // Fetch all services from Consul
+        const consulServices = await fetchConsulServices();
 
-      // Filter out excluded services and those with no tags (internal services)
-      const relevantServices = consulServices.filter(service =>
-        !EXCLUDED_SERVICES.includes(service.Service) &&
-        !EXCLUDED_SERVICES.includes(service.ID) &&
-        service.Tags && service.Tags.length > 0
-      );
+        // Filter out excluded services and those with no tags (internal services)
+        const relevantServices = consulServices.filter(
+          (service) =>
+            !EXCLUDED_SERVICES.includes(service.Service) &&
+            !EXCLUDED_SERVICES.includes(service.ID) &&
+            service.Tags &&
+            service.Tags.length > 0
+        );
 
-      // Check health of all services in parallel
-      const serviceChecks = await Promise.all(
-        relevantServices.map(service => checkServiceHealth(service))
-      );
+        // Check health of all services in parallel
+        const serviceChecks = await Promise.all(relevantServices.map((service) => checkServiceHealth(service)));
 
-      // Filter out null results (unmapped Docker services)
-      const validServices = serviceChecks.filter(s => s !== null);
+        // Filter out null results (unmapped Docker services)
+        const validServices = serviceChecks.filter((s) => s !== null);
 
-      // Calculate summary
-      const total = validServices.length;
-      const healthy = validServices.filter(s => s.status === 'healthy').length;
-      const unhealthy = total - healthy;
-      const healthPercentage = total > 0 ? Math.round((healthy / total) * 100) : 0;
+        // Calculate summary
+        const total = validServices.length;
+        const healthy = validServices.filter((s) => s.status === 'healthy').length;
+        const unhealthy = total - healthy;
+        const healthPercentage = total > 0 ? Math.round((healthy / total) * 100) : 0;
 
-      const healthData: ServicesHealthResponse = {
-        services: validServices,
-        summary: {
-          total,
-          healthy,
-          unhealthy,
-          healthPercentage,
-        },
-      };
+        const healthData: ServicesHealthResponse = {
+          services: validServices,
+          summary: {
+            total,
+            healthy,
+            unhealthy,
+            healthPercentage,
+          },
+        };
 
-      const response: ApiResponse<ServicesHealthResponse> = {
-        success: true,
-        data: healthData,
-        timestamp: new Date().toISOString(),
-      };
+        const response: ApiResponse<ServicesHealthResponse> = {
+          success: true,
+          data: healthData,
+          timestamp: new Date().toISOString(),
+        };
 
-      return response;
-    } catch (error: any) {
-      fastify.log.error({ error }, 'Failed to fetch services from Consul');
+        return response;
+      } catch (error: any) {
+        fastify.log.error({ error }, 'Failed to fetch services from Consul');
 
-      // Return error response
-      return reply.code(503).send({
-        success: false,
-        error: `Failed to fetch services: ${error.message}`,
-        timestamp: new Date().toISOString(),
-      });
+        // Return error response
+        return reply.code(503).send({
+          success: false,
+          error: `Failed to fetch services: ${error.message}`,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
-  });
+  );
 }

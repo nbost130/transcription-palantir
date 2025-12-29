@@ -4,18 +4,18 @@
  * BullMQ worker for processing transcription jobs with Whisper.cpp
  */
 
-import { Worker, Job } from 'bullmq';
-import { Redis } from 'ioredis';
+import { type Job, Worker } from 'bullmq';
 import { spawn } from 'child_process';
-import { mkdir, access, rename, copyFile, writeFile } from 'fs/promises';
 import { constants } from 'fs';
-import { join, dirname, basename, extname } from 'path';
+import { access, copyFile, mkdir, rename, writeFile } from 'fs/promises';
+import { Redis } from 'ioredis';
+import { basename, dirname, extname, join } from 'path';
 import { appConfig, getRedisUrl, getWhisperCommand } from '../config/index.js';
-import { logger } from '../utils/logger.js';
-import { whisperService } from '../services/whisper.js';
 import { fasterWhisperService } from '../services/faster-whisper.js';
 import { fileTracker } from '../services/file-tracker.js';
+import { whisperService } from '../services/whisper.js';
 import type { TranscriptionJob } from '../types/index.js';
+import { logger } from '../utils/logger.js';
 
 // =============================================================================
 // REDIS CONNECTION
@@ -49,19 +49,26 @@ export class TranscriptionWorker {
     try {
       // Redis connection is handled automatically by BullMQ
       logger.info('🔵 DEBUG: About to create Worker instance');
-      logger.info({ queueName: 'transcription', concurrency: appConfig.processing.maxWorkers }, '🔵 DEBUG: Worker config');
+      logger.info(
+        { queueName: 'transcription', concurrency: appConfig.processing.maxWorkers },
+        '🔵 DEBUG: Worker config'
+      );
 
-      this.worker = new Worker('transcription', async (job: Job) => {
-        logger.info({ jobId: job.id }, '🔵 DEBUG: PROCESSOR CALLBACK INVOKED!!!');
-        return await this.processJob(job);
-      }, {
-        connection: redisConnection,
-        concurrency: appConfig.processing.maxWorkers,
-        limiter: {
-          max: appConfig.processing.maxWorkers,
-          duration: 1000,
+      this.worker = new Worker(
+        'transcription',
+        async (job: Job) => {
+          logger.info({ jobId: job.id }, '🔵 DEBUG: PROCESSOR CALLBACK INVOKED!!!');
+          return await this.processJob(job);
         },
-      });
+        {
+          connection: redisConnection,
+          concurrency: appConfig.processing.maxWorkers,
+          limiter: {
+            max: appConfig.processing.maxWorkers,
+            duration: 1000,
+          },
+        }
+      );
 
       logger.info('🔵 DEBUG: Worker instance created');
 
@@ -283,18 +290,14 @@ export class TranscriptionWorker {
       // Use whisperService which has the correct command format
       logger.info({ inputPath, outputDir }, 'Running Whisper.cpp transcription via whisperService');
 
-      const result = await fasterWhisperService.transcribe(
-        inputPath,
-        outputDir,
-        {
-          model: 'medium',
-          device: 'cpu',
-          computeType: 'int8',  // int8 for CPU compatibility (float16 requires GPU)
-          beamSize: 5,
-          vadFilter: false,  // Disable VAD for now (can enable later)
-          wordTimestamps: false,
-        }
-      );
+      const result = await fasterWhisperService.transcribe(inputPath, outputDir, {
+        model: 'medium',
+        device: 'cpu',
+        computeType: 'int8', // int8 for CPU compatibility (float16 requires GPU)
+        beamSize: 5,
+        vadFilter: false, // Disable VAD for now (can enable later)
+        wordTimestamps: false,
+      });
 
       logger.info({ transcriptPath: result.text }, 'Whisper.cpp transcription completed');
 
@@ -304,7 +307,6 @@ export class TranscriptionWorker {
       const transcriptPath = join(outputDir, `${inputBasename}.txt`);
 
       return transcriptPath;
-
     } catch (error) {
       logger.error({ error, inputPath }, 'Whisper.cpp transcription failed');
       throw error; // Re-throw the error to fail the job properly
@@ -381,7 +383,9 @@ To enable real transcription:
     // Extract the relative path from the watch directory
     const watchDir = appConfig.processing.watchDirectory;
     const relativePath = filePath.startsWith(watchDir)
-      ? filePath.slice(watchDir.length).replace(/^\//, '') // Remove leading slash
+      ? filePath
+          .slice(watchDir.length)
+          .replace(/^\//, '') // Remove leading slash
       : basename(filePath); // Fallback to just filename if not in watch dir
 
     // Get the directory structure and filename
@@ -390,9 +394,10 @@ To enable real transcription:
     const baseName = basename(fileName, extname(fileName));
 
     // Build output path preserving directory structure
-    const outputDir = relativeDir && relativeDir !== '.'
-      ? join(appConfig.processing.outputDirectory, relativeDir)
-      : appConfig.processing.outputDirectory;
+    const outputDir =
+      relativeDir && relativeDir !== '.'
+        ? join(appConfig.processing.outputDirectory, relativeDir)
+        : appConfig.processing.outputDirectory;
 
     // Return path without timestamp (we want consistent filenames)
     return join(outputDir, baseName);
@@ -403,7 +408,9 @@ To enable real transcription:
       // Extract the relative path from the watch directory to preserve structure
       const watchDir = appConfig.processing.watchDirectory;
       const relativePath = filePath.startsWith(watchDir)
-        ? filePath.slice(watchDir.length).replace(/^\//, '') // Remove leading slash
+        ? filePath
+            .slice(watchDir.length)
+            .replace(/^\//, '') // Remove leading slash
         : basename(filePath); // Fallback to just filename if not in watch dir
 
       // Get the directory structure and filename
@@ -411,9 +418,10 @@ To enable real transcription:
       const fileName = basename(relativePath);
 
       // Build completed path preserving directory structure
-      const completedDir = relativeDir && relativeDir !== '.'
-        ? join(appConfig.processing.completedDirectory, relativeDir)
-        : appConfig.processing.completedDirectory;
+      const completedDir =
+        relativeDir && relativeDir !== '.'
+          ? join(appConfig.processing.completedDirectory, relativeDir)
+          : appConfig.processing.completedDirectory;
 
       // Ensure the completed subdirectory exists
       await mkdir(completedDir, { recursive: true });
@@ -431,7 +439,9 @@ To enable real transcription:
       // Extract the relative path from the watch directory to preserve structure
       const watchDir = appConfig.processing.watchDirectory;
       const relativePath = filePath.startsWith(watchDir)
-        ? filePath.slice(watchDir.length).replace(/^\//, '') // Remove leading slash
+        ? filePath
+            .slice(watchDir.length)
+            .replace(/^\//, '') // Remove leading slash
         : basename(filePath); // Fallback to just filename if not in watch dir
 
       // Get the directory structure and filename
@@ -439,9 +449,10 @@ To enable real transcription:
       const fileName = basename(relativePath);
 
       // Build failed path preserving directory structure
-      const failedDir = relativeDir && relativeDir !== '.'
-        ? join(appConfig.processing.failedDirectory, relativeDir)
-        : appConfig.processing.failedDirectory;
+      const failedDir =
+        relativeDir && relativeDir !== '.'
+          ? join(appConfig.processing.failedDirectory, relativeDir)
+          : appConfig.processing.failedDirectory;
 
       // Ensure the failed subdirectory exists
       await mkdir(failedDir, { recursive: true });
@@ -467,9 +478,7 @@ To enable real transcription:
       processedJobs: this.processedJobs,
       failedJobs: this.failedJobs,
       successRate:
-        this.processedJobs > 0
-          ? ((this.processedJobs / (this.processedJobs + this.failedJobs)) * 100).toFixed(2)
-          : 0,
+        this.processedJobs > 0 ? ((this.processedJobs / (this.processedJobs + this.failedJobs)) * 100).toFixed(2) : 0,
     };
   }
 }

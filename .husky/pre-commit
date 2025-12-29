@@ -1,1 +1,16 @@
-bun run test:seq
+#!/bin/sh
+# Pre-commit hook: Run quality checks before allowing commit
+
+echo "🔨 Checking TypeScript compilation..."
+npm run build || exit 1
+
+echo "🎨 Checking code quality (Biome: linting & formatting)..."
+npm run biome:check || exit 1
+
+echo "📏 Checking file sizes (max 500 lines)..."
+npm run check:size || exit 1
+
+echo "✅ Running tests..."
+npm run test:seq || exit 1
+
+echo "✨ All checks passed! Proceeding with commit..."

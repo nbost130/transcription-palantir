@@ -5,9 +5,9 @@
  */
 
 import { spawn } from 'child_process';
-import { access, mkdir, readFile, writeFile } from 'fs/promises';
 import { constants } from 'fs';
-import { join, dirname, basename, extname } from 'path';
+import { access, mkdir, readFile, writeFile } from 'fs/promises';
+import { basename, dirname, extname, join } from 'path';
 import { appConfig, getWhisperCommand } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
@@ -90,8 +90,8 @@ export class WhisperService {
   async validateModel(modelName: string): Promise<boolean> {
     // Handle both full path and model name
     const modelPath = modelName.includes('/')
-      ? modelName  // Full path provided
-      : join(this.modelsPath, `ggml-${modelName}.bin`);  // Just model name
+      ? modelName // Full path provided
+      : join(this.modelsPath, `ggml-${modelName}.bin`); // Just model name
 
     try {
       await access(modelPath, constants.R_OK);
@@ -136,7 +136,7 @@ export class WhisperService {
     if (!binaryExists) {
       throw new Error(
         `Whisper.cpp binary not found at ${this.binaryPath}. ` +
-        'Please install Whisper.cpp and update WHISPER_BINARY_PATH in your .env file.'
+          'Please install Whisper.cpp and update WHISPER_BINARY_PATH in your .env file.'
       );
     }
 
@@ -146,7 +146,7 @@ export class WhisperService {
     if (!modelExists) {
       throw new Error(
         `Whisper model '${model}' not found. ` +
-        `Please download the model or use one of: ${(await this.getInstalledModels()).join(', ')}`
+          `Please download the model or use one of: ${(await this.getInstalledModels()).join(', ')}`
       );
     }
 
@@ -161,13 +161,16 @@ export class WhisperService {
     // Build command
     const args = this.buildWhisperArgs(inputFile, outputDir, baseName, options);
 
-    logger.info({
-      inputFile,
-      outputFile,
-      model,
-      language: options.language,
-      task: options.task,
-    }, 'Starting Whisper.cpp transcription');
+    logger.info(
+      {
+        inputFile,
+        outputFile,
+        model,
+        language: options.language,
+        task: options.task,
+      },
+      'Starting Whisper.cpp transcription'
+    );
 
     try {
       // Run Whisper.cpp
@@ -192,12 +195,7 @@ export class WhisperService {
   /**
    * Build Whisper.cpp command arguments
    */
-  private buildWhisperArgs(
-    inputFile: string,
-    outputDir: string,
-    baseName: string,
-    options: WhisperOptions
-  ): string[] {
+  private buildWhisperArgs(inputFile: string, outputDir: string, baseName: string, options: WhisperOptions): string[] {
     const model = options.model || appConfig.whisper.model;
     const language = options.language || appConfig.whisper.language;
     const task = options.task || appConfig.whisper.task;
@@ -205,13 +203,10 @@ export class WhisperService {
 
     // Handle both full path and model name
     const modelPath = model.includes('/')
-      ? model  // Full path provided
-      : join(this.modelsPath, `ggml-${model}.bin`);  // Just model name
+      ? model // Full path provided
+      : join(this.modelsPath, `ggml-${model}.bin`); // Just model name
 
-    const args = [
-      '-m', modelPath,
-      '-f', inputFile,
-    ];
+    const args = ['-m', modelPath, '-f', inputFile];
 
     // Language (auto-detection if 'auto')
     if (language && language !== 'auto') {
@@ -289,10 +284,7 @@ export class WhisperService {
   /**
    * Run Whisper.cpp binary and capture output
    */
-  private async runWhisper(
-    args: string[],
-    onProgress?: (progress: WhisperProgress) => void
-  ): Promise<void> {
+  private async runWhisper(args: string[], onProgress?: (progress: WhisperProgress) => void): Promise<void> {
     return new Promise((resolve, reject) => {
       const child = spawn(this.binaryPath, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -336,9 +328,7 @@ export class WhisperService {
           }
           resolve();
         } else {
-          const error = new Error(
-            `Whisper.cpp exited with code ${code}. stderr: ${stderr}`
-          );
+          const error = new Error(`Whisper.cpp exited with code ${code}. stderr: ${stderr}`);
           reject(error);
         }
       });
@@ -353,10 +343,7 @@ export class WhisperService {
   /**
    * Parse transcription output file
    */
-  private async parseTranscriptionOutput(
-    outputFile: string,
-    format: string
-  ): Promise<TranscriptionResult> {
+  private async parseTranscriptionOutput(outputFile: string, format: string): Promise<TranscriptionResult> {
     try {
       const content = await readFile(outputFile, 'utf-8');
 
