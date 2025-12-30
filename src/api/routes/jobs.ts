@@ -6,6 +6,7 @@
 
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { stat } from 'fs/promises';
+import { promises as fs } from 'fs';
 import { basename, extname } from 'path';
 import { transcriptionQueue } from '../../services/queue.js';
 import {
@@ -702,6 +703,20 @@ export async function jobRoutes(
         timestamp: new Date().toISOString(),
         requestId: request.id,
       });
+    }
+
+    // Check if the input file exists
+    if (job.data.filePath) {
+      try {
+        await fs.access(job.data.filePath);
+      } catch (error) {
+        return reply.code(400).send({
+          success: false,
+          error: `Input file not accessible: ${job.data.filePath}`,
+          timestamp: new Date().toISOString(),
+          requestId: request.id,
+        });
+      }
     }
 
     try {
