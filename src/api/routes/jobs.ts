@@ -662,25 +662,77 @@ export async function jobRoutes(fastify: FastifyInstance, opts: FastifyPluginOpt
               requestId: { type: 'string' },
             },
           },
+          404: {
+            description: 'Job not found.',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', default: false },
+              error: { type: 'string' },
+              timestamp: { type: 'string' },
+              requestId: { type: 'string' },
+            },
+          },
+          409: {
+            description: 'Job is not in the failed state.',
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', default: false },
+              error: { type: 'string' },
+              timestamp: { type: 'string' },
+              requestId: { type: 'string' },
+            },
+          },
         },
       },
     },
     async (request, reply) => {
       const { jobId } = request.params;
 
-      await transcriptionQueue.retryJob(jobId);
+      // First check if the job exists
+      const job = await transcriptionQueue.getJob(jobId);
+      if (!job) {
+        return reply.code(404).send({
+          success: false,
+          error: `Job ${jobId} not found`,
+          timestamp: new Date().toISOString(),
+          requestId: request.id,
+        });
+      }
 
-      const response: ApiResponse = {
-        success: true,
-        data: {
-          jobId,
-          message: 'Job retried successfully',
-        },
-        timestamp: new Date().toISOString(),
-        requestId: request.id,
-      };
+      // Check if the job is in a failed state
+      const state = await job.getState();
+      if (state !== 'failed') {
+        return reply.code(409).send({
+          success: false,
+          error: `Job ${jobId} is not in the failed state. Current state: ${state}`,
+          timestamp: new Date().toISOString(),
+          requestId: request.id,
+        });
+      }
 
-      return response;
+      try {
+        await transcriptionQueue.retryJob(jobId);
+
+        const response: ApiResponse = {
+          success: true,
+          data: {
+            jobId,
+            message: 'Job retried successfully',
+          },
+          timestamp: new Date().toISOString(),
+          requestId: request.id,
+        };
+
+        return response;
+      } catch (error: any) {
+        fastify.log.error({ error, jobId }, 'Failed to retry job');
+        return reply.code(500).send({
+          success: false,
+          error: `Failed to retry job: ${error.message}`,
+          timestamp: new Date().toISOString(),
+          requestId: request.id,
+        });
+      }
     }
   );
 
