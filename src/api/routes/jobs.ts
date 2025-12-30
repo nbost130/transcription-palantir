@@ -196,10 +196,9 @@ export async function jobRoutes(
       const stats = await transcriptionQueue.getQueueStats();
       total = stats.total;
 
-      // For now, just get waiting jobs
       const start = (validated.page - 1) * validated.limit;
       const end = start + validated.limit - 1;
-      jobs = await transcriptionQueue.getJobs(JobStatus.PENDING, start, end);
+      jobs = await transcriptionQueue.getAllJobs(start, end);
     }
 
     const response: PaginatedResponse<any> = {
