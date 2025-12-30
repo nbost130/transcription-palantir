@@ -292,11 +292,14 @@ export async function jobRoutes(
       };
     }
 
+    const state = await job.getState();
+
     const response: ApiResponse = {
       success: true,
       data: {
         jobId: job.id,
         name: job.name,
+        status: state,
         data: job.data,
         progress: job.progress,
         attemptsMade: job.attemptsMade,
