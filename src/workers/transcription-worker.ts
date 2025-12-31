@@ -61,6 +61,8 @@ export class TranscriptionWorker {
           max: appConfig.processing.maxWorkers,
           duration: 1000,
         },
+        lockDuration: appConfig.processing.lockDuration,
+        stalledInterval: appConfig.processing.stalledInterval,
       });
 
       logger.info('🔵 DEBUG: Worker instance created');
@@ -163,7 +165,7 @@ export class TranscriptionWorker {
     });
 
     this.worker.on('stalled', (jobId: string) => {
-      logger.warn({ jobId }, '⚠️ Job stalled');
+      logger.warn({ jobId }, '[SELF-HEAL] Job stalled. Re-queuing...');
     });
 
     this.worker.on('error', (error: Error) => {
@@ -250,7 +252,7 @@ export class TranscriptionWorker {
       );
 
       // Move failed file
-      await this.moveFailedFile(jobData.filePath).catch(() => {});
+      await this.moveFailedFile(jobData.filePath).catch(() => { });
 
       throw error;
     }

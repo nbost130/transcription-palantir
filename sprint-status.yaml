@@ -46,7 +46,7 @@ development_status:
   1-2-create-atomic-file-operations-utility: done
   1-3-create-reconciliationservice: done
   1-4-implement-boot-sequence-orchestration: done
-  1-5-implement-stalled-job-detection: backlog
+  1-5-implement-stalled-job-detection: done
   1-6-implement-reactive-state-re-injection: backlog
   epic-1-retrospective: optional
 
