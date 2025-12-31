@@ -20,7 +20,7 @@ import { metricsRoutes } from './routes/metrics.js';
 import { monitorRoutes } from './routes/monitor.js';
 import { websocketRoutes } from './routes/websocket.js';
 import servicesRoutes from './routes/services.js';
-import { systemRoutes } from './routes/system.js';
+import { systemRoutes } from './routes/system-routes.js';
 import { errorHandler } from './middleware/error.js';
 import { requestLogger } from './middleware/logger.js';
 

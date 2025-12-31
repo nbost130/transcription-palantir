@@ -160,9 +160,9 @@ See [Mithrandir Unified API documentation](../mithrandir-unified-api/README.md) 
 ### Running Tests
 
 ```bash
-bun test              # Run all tests
-bun test --watch      # Watch mode
-bun test --coverage   # With coverage
+npm test              # Run all tests (using Vitest)
+npm run test:watch    # Watch mode
+npm run test:coverage # With coverage
 ```
 
 ### Code Quality

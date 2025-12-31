@@ -4,7 +4,7 @@
  * Tests the Fastify API server endpoints
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { mkdir, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -118,5 +118,17 @@ describe('API Integration Tests', () => {
   test('GET /docs should return Swagger documentation', async () => {
     const response = await fetch(`${BASE_URL}/docs`);
     expect(response.status).toBe(200);
+  });
+
+  test('POST /system/reconcile should trigger reconciliation', async () => {
+    const response = await fetch(`${BASE_URL}/api/v1/system/reconcile`, {
+      method: 'POST',
+    });
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(data.report).toBeDefined();
+    expect(typeof data.report.filesScanned).toBe('number');
   });
 });

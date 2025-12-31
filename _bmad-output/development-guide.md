@@ -58,9 +58,12 @@ This starts:
 
 ## Testing
 
-Run unit and integration tests:
+### Running Tests
+We use **Vitest** for testing (via `npm test`) to ensure compatibility with Fastify.
+
 ```bash
-bun test
+npm test              # Run all tests
+npm run test:watch    # Watch mode
 ```
 
 Run integration tests only:

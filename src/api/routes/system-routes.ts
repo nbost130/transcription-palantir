@@ -3,9 +3,7 @@ import { logger } from '../../utils/logger.js';
 import { ReconciliationService } from '../../services/reconciliation.js';
 import { transcriptionQueue } from '../../services/queue.js';
 import { appConfig } from '../../config/index.js';
-import fp from 'fastify-plugin';
-
-export const systemRoutes = fp(async (fastify: FastifyInstance) => {
+export async function systemRoutes(fastify: FastifyInstance) {
     // POST /system/reconcile
     // Manually trigger reconciliation process
     fastify.post('/reconcile', async (request, reply) => {
@@ -28,4 +26,4 @@ export const systemRoutes = fp(async (fastify: FastifyInstance) => {
             };
         }
     });
-});
+}

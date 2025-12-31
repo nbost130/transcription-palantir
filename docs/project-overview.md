@@ -2,7 +2,7 @@
 
 **Type:** Backend Service
 **Language:** TypeScript
-**Framework:** Fastify, BullMQ
+**Framework:** Fastify, BullMQ, Redis
 **Date:** 2025-12-30
 
 ## Description
