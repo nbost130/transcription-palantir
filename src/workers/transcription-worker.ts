@@ -91,9 +91,38 @@ export class TranscriptionWorker {
       return;
     }
 
+    // Log graceful shutdown initiation (Story 2.7)
+    logger.info('Graceful shutdown initiated');
+
     try {
       if (this.worker) {
-        await this.worker.close();
+        // Create timeout promise (Story 2.7: force-exit after 60 seconds)
+        const SHUTDOWN_TIMEOUT_MS = 60000;
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('Graceful shutdown timeout'));
+          }, SHUTDOWN_TIMEOUT_MS);
+        });
+
+        // Race between graceful shutdown and timeout
+        try {
+          await Promise.race([
+            this.worker.close(), // Waits for current job to complete
+            timeoutPromise,
+          ]);
+        } catch (error: any) {
+          if (error.message === 'Graceful shutdown timeout') {
+            logger.warn('Graceful shutdown timeout, forcing exit');
+            // Force close without waiting
+            await this.worker.close(true);
+            this.worker = null;
+            await redisConnection.quit();
+            this.isRunning = false;
+            process.exit(1);
+          }
+          throw error;
+        }
+
         this.worker = null;
       }
 
@@ -101,12 +130,13 @@ export class TranscriptionWorker {
 
       this.isRunning = false;
 
+      // Log graceful shutdown completion (Story 2.7)
       logger.info(
         {
           processedJobs: this.processedJobs,
           failedJobs: this.failedJobs,
         },
-        '✅ Transcription worker stopped gracefully'
+        'Graceful shutdown complete'
       );
     } catch (error) {
       logger.error({ error }, 'Error stopping transcription worker');
