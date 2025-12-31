@@ -10,7 +10,14 @@ vi.mock('bullmq', () => ({
   Job: vi.fn(),
 }));
 vi.mock('ioredis', () => ({
-  Redis: vi.fn(),
+  Redis: vi.fn().mockImplementation(() => ({
+    on: vi.fn(),
+  })),
+}));
+vi.mock('../../src/services/whisper.js', () => ({
+  whisperService: {
+    transcribeAudio: vi.fn(),
+  },
 }));
 vi.mock('../../src/config/index.js', () => ({
   appConfig: {
@@ -26,6 +33,11 @@ vi.mock('../../src/config/index.js', () => ({
     whisper: {
       model: 'tiny',
       binaryPath: '/usr/bin/whisper',
+      pythonPath: '/usr/bin/python3',
+      computeType: 'float16',
+      language: 'auto',
+      task: 'transcribe',
+      usePython: true,
     },
     redis: {
       host: 'localhost',
