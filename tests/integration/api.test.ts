@@ -25,8 +25,8 @@ describe('API Integration Tests', () => {
     await mkdir(TEST_WATCH_DIR, { recursive: true });
 
     await transcriptionQueue.initialize();
-    // Clear any existing jobs to ensure clean state
-    await transcriptionQueue.queueInstance.obliterate({ force: true });
+    // Clean existing jobs (without obliterating connection)
+    await transcriptionQueue.cleanQueue(0);
 
     await fileWatcher.start();
     await apiServer.start();
