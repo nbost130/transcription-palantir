@@ -5,22 +5,43 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
+import { mkdir, rm } from 'fs/promises';
+import { join } from 'path';
+import { tmpdir } from 'os';
 import { apiServer } from '../../src/api/server.js';
 import { transcriptionQueue } from '../../src/services/queue.js';
+import { fileWatcher } from '../../src/services/file-watcher.js';
+import { appConfig } from '../../src/config/index.js';
+
+// Override watch directory for tests to avoid processing real files
+const TEST_WATCH_DIR = join(tmpdir(), 'palantir-test-watch-' + Date.now());
+appConfig.processing.watchDirectory = TEST_WATCH_DIR;
+
+const BASE_URL = `http://127.0.0.1:${appConfig.port}`;
 
 describe('API Integration Tests', () => {
   beforeAll(async () => {
+    // Ensure watch directory exists
+    await mkdir(TEST_WATCH_DIR, { recursive: true });
+
     await transcriptionQueue.initialize();
+    // Clear any existing jobs to ensure clean state
+    await transcriptionQueue.queueInstance.obliterate({ force: true });
+
+    await fileWatcher.start();
     await apiServer.start();
   });
 
   afterAll(async () => {
     await apiServer.stop();
+    await fileWatcher.stop();
     await transcriptionQueue.close();
+    // Cleanup temp directory
+    await rm(TEST_WATCH_DIR, { recursive: true, force: true });
   });
 
   test('GET / should return API information', async () => {
-    const response = await fetch('http://localhost:3000/');
+    const response = await fetch(`${BASE_URL}/`);
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -29,7 +50,7 @@ describe('API Integration Tests', () => {
   });
 
   test('GET /health should return health status', async () => {
-    const response = await fetch('http://localhost:3000/api/v1/health');
+    const response = await fetch(`${BASE_URL}/api/v1/health`);
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -38,7 +59,7 @@ describe('API Integration Tests', () => {
   });
 
   test('GET /ready should return readiness status', async () => {
-    const response = await fetch('http://localhost:3000/api/v1/ready');
+    const response = await fetch(`${BASE_URL}/api/v1/ready`);
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -48,7 +69,7 @@ describe('API Integration Tests', () => {
   });
 
   test('GET /health/detailed should return detailed health', async () => {
-    const response = await fetch('http://localhost:3000/api/v1/health/detailed');
+    const response = await fetch(`${BASE_URL}/api/v1/health/detailed`);
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -58,7 +79,7 @@ describe('API Integration Tests', () => {
   });
 
   test('POST /jobs should create a new job (with error for non-existent file)', async () => {
-    const response = await fetch('http://localhost:3000/api/v1/jobs', {
+    const response = await fetch(`${BASE_URL}/api/v1/jobs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -73,7 +94,7 @@ describe('API Integration Tests', () => {
   });
 
   test('GET /jobs should return list of jobs', async () => {
-    const response = await fetch('http://localhost:3000/api/v1/jobs');
+    const response = await fetch(`${BASE_URL}/api/v1/jobs`);
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -84,7 +105,7 @@ describe('API Integration Tests', () => {
   });
 
   test('GET /queue/stats should return queue statistics', async () => {
-    const response = await fetch('http://localhost:3000/api/v1/queue/stats');
+    const response = await fetch(`${BASE_URL}/api/v1/queue/stats`);
     const data = await response.json();
 
     expect(response.status).toBe(200);
@@ -95,7 +116,7 @@ describe('API Integration Tests', () => {
   });
 
   test('GET /docs should return Swagger documentation', async () => {
-    const response = await fetch('http://localhost:3000/docs');
+    const response = await fetch(`${BASE_URL}/docs`);
     expect(response.status).toBe(200);
   });
 });
