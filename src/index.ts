@@ -12,6 +12,7 @@ import { fileWatcher } from './services/file-watcher.js';
 import { transcriptionWorker } from './workers/transcription-worker.js';
 import { processGuard } from './services/process-guard.js';
 import { fileTracker } from './services/file-tracker.js';
+import { ReconciliationService } from './services/reconciliation.js';
 
 // =============================================================================
 // APPLICATION CLASS
@@ -91,6 +92,11 @@ class TranscriptionPalantir {
     // Initialize queue service
     await transcriptionQueue.initialize();
     logger.info('✅ Queue service initialized');
+
+    // Run boot reconciliation (Self-Healing)
+    // Must run BEFORE file watcher starts to ensure consistent state
+    const reconciliationService = new ReconciliationService(transcriptionQueue, appConfig);
+    await reconciliationService.reconcileOnBoot();
 
     // TODO: Initialize other services
     // - File watcher service

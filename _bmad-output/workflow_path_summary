@@ -1,0 +1,20 @@
+**Phase 0: Documentation**
+- [ ] Document Project (Required)
+
+**Phase 1: Discovery**
+- [ ] Brainstorm (Selected)
+- [-] Research (Skipped)
+- [-] Product Brief (Skipped)
+
+**Phase 2: Planning**
+- [ ] PRD (Required)
+- [ ] UX Design (Conditional - if UI exists)
+
+**Phase 3: Solutioning**
+- [ ] Architecture (Recommended)
+- [ ] Epics & Stories (Required)
+- [ ] Test Design (Recommended)
+- [ ] Readiness Check (Required)
+
+**Phase 4: Implementation**
+- [ ] Sprint Planning (Required)

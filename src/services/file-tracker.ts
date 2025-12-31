@@ -6,10 +6,11 @@
  */
 
 import type { Redis } from 'ioredis';
+import { Redis as IORedis } from 'ioredis';
 import { createHash } from 'crypto';
 import { stat } from 'fs/promises';
 import { logger } from '../utils/logger.js';
-import { redisConnection } from './queue.js';
+import { getRedisUrl, appConfig } from '../config/index.js';
 
 // =============================================================================
 // CONSTANTS
@@ -29,8 +30,15 @@ export class FileTrackerService {
   private isConnected = false;
 
   constructor() {
-    // Reuse the existing Redis connection from queue service
-    this.redis = redisConnection;
+    // Use a dedicated Redis connection
+    this.redis = new IORedis(getRedisUrl(), {
+      maxRetriesPerRequest: null,
+      connectTimeout: appConfig.redis.connectTimeout,
+      retryStrategy(times) {
+        const delay = Math.min(times * 50, 2000);
+        return delay;
+      },
+    });
     this.setupEventListeners();
   }
 
@@ -64,7 +72,7 @@ export class FileTrackerService {
     }
 
     try {
-      // Don't disconnect the shared Redis connection - it's managed by queue service
+      await this.redis.quit();
       this.isConnected = false;
       logger.info('📝 File tracker released Redis connection');
     } catch (error) {

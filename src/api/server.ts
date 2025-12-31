@@ -16,11 +16,11 @@ import { appConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { healthRoutes } from './routes/health.js';
 import { jobRoutes } from './routes/jobs.js';
-import { metricsRoutes } from './routes/metrics.js';
+// import { metricsRoutes } from './routes/metrics.js'; // TODO: Implement prometheus service first
 import { monitorRoutes } from './routes/monitor.js';
 import { websocketRoutes } from './routes/websocket.js';
 import servicesRoutes from './routes/services.js';
-import { systemRoutes } from './routes/system.js';
+import { systemRoutes } from './routes/system-routes.js';
 import { errorHandler } from './middleware/error.js';
 import { requestLogger } from './middleware/logger.js';
 
@@ -236,8 +236,8 @@ export class ApiServer {
     // System information routes
     fastify.register(systemRoutes, { prefix });
 
-    // Metrics routes (Prometheus)
-    fastify.register(metricsRoutes, { prefix });
+    // Metrics routes (Prometheus) - TODO: Implement prometheus service first
+    // fastify.register(metricsRoutes, { prefix });
 
     // Monitoring dashboard routes
     fastify.register(monitorRoutes, { prefix });

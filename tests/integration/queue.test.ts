@@ -4,7 +4,7 @@
  * Tests the BullMQ queue system with Redis
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { transcriptionQueue } from '../../src/services/queue.js';
 import { JobStatus, JobPriority } from '../../src/types/index.js';
 

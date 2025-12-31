@@ -7,7 +7,8 @@
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { stat } from 'fs/promises';
 import { promises as fs } from 'fs';
-import { basename, extname } from 'path';
+import { basename, extname, join, relative } from 'path';
+import { appConfig } from '../../config/index.js';
 import { transcriptionQueue } from '../../services/queue.js';
 import {
   JobCreateSchema,
@@ -204,12 +205,15 @@ export async function jobRoutes(
 
     const response: PaginatedResponse<any> = {
       success: true,
-      data: jobs.map(job => {
-        // Derive status from BullMQ job state
+      data: await Promise.all(jobs.map(async job => {
+        const state = await job.getState();
         let jobStatus = 'pending';
-        if (job.finishedOn) {
-          jobStatus = job.failedReason ? 'failed' : 'completed';
-        } else if (job.processedOn && !job.finishedOn) {
+
+        if (state === 'completed') {
+          jobStatus = 'completed';
+        } else if (state === 'failed') {
+          jobStatus = 'failed';
+        } else if (state === 'active') {
           jobStatus = 'processing';
         }
 
@@ -226,7 +230,7 @@ export async function jobRoutes(
           error: job.failedReason || null,
           fileSize: job.data.fileSize || null,
         };
-      }),
+      })),
       pagination: {
         page: validated.page,
         limit: validated.limit,
@@ -710,12 +714,24 @@ export async function jobRoutes(
       try {
         await fs.access(job.data.filePath);
       } catch (error) {
-        return reply.code(400).send({
-          success: false,
-          error: `Input file not accessible: ${job.data.filePath}`,
-          timestamp: new Date().toISOString(),
-          requestId: request.id,
-        });
+        // Try to recover from failed directory
+        try {
+          const relativePath = relative(appConfig.processing.watchDirectory, job.data.filePath);
+          const failedPath = join(appConfig.processing.failedDirectory, relativePath);
+
+          await fs.access(failedPath);
+
+          // Move back to original location
+          await fs.rename(failedPath, job.data.filePath);
+          fastify.log.info({ jobId, from: failedPath, to: job.data.filePath }, 'Restored file from failed directory for retry');
+        } catch (recoveryError) {
+          return reply.code(400).send({
+            success: false,
+            error: `Input file not accessible: ${job.data.filePath}`,
+            timestamp: new Date().toISOString(),
+            requestId: request.id,
+          });
+        }
       }
     }
 
@@ -758,7 +774,17 @@ export async function jobRoutes(
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            data: { type: 'object' },
+            data: {
+              type: 'object',
+              properties: {
+                waiting: { type: 'number' },
+                active: { type: 'number' },
+                completed: { type: 'number' },
+                failed: { type: 'number' },
+                delayed: { type: 'number' },
+                total: { type: 'number' },
+              },
+            },
             timestamp: { type: 'string' },
             requestId: { type: 'string' },
           },

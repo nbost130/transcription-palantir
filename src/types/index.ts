@@ -195,6 +195,8 @@ export interface ProcessingConfig {
   minWorkers: number;
   jobTimeout: number;
   maxAttempts: number;
+  stalledInterval: number;
+  lockDuration: number;
 }
 
 export interface ApiConfig {

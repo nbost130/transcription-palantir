@@ -1,0 +1,78 @@
+# generated: 2025-12-31
+# project: transcription-palantir
+# project_key: transcription-palantir
+# tracking_system: bmm-sprint-status
+# story_location: _bmad-output/stories
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - SM typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2025-12-31
+project: transcription-palantir
+project_key: transcription-palantir
+tracking_system: bmm-sprint-status
+story_location: _bmad-output/stories
+
+development_status:
+  # Epic 1: Self-Healing Boot & Recovery
+  epic-1: in-progress
+  1-1-create-healthstatus-enum-and-types: done
+  1-2-create-atomic-file-operations-utility: done
+  1-3-create-reconciliationservice: done
+  1-4-implement-boot-sequence-orchestration: done
+  1-5-implement-stalled-job-detection: done
+  1-6-implement-reactive-state-re-injection: done
+  epic-1-retrospective: optional
+
+  # Epic 2: Reliable Job Processing
+  epic-2: in-progress
+  2-1-implement-filename-sanitization-on-ingestion: done
+  2-2-implement-duplicate-file-prevention: done
+  2-3-enhance-job-crud-endpoints: backlog
+  2-4-implement-robust-retry-logic: backlog
+  2-5-implement-error-code-and-reason-tracking: backlog
+  2-6-implement-system-health-endpoint: backlog
+  2-7-implement-graceful-shutdown: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Dashboard Data Accuracy
+  epic-3: backlog
+  3-1-implement-accurate-pagination-with-getjobcounts: backlog
+  3-2-implement-dynamic-healthstatus-computation: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: API Contracts & Integration
+  epic-4: backlog
+  4-1-expose-prometheus-metrics-endpoint: backlog
+  4-2-generate-openapi-specification: backlog
+  4-3-ensure-zod-openapi-schema-parity: backlog
+  4-4-implement-api-input-validation: backlog
+  4-5-document-api-versioning-policy: backlog
+  4-6-setup-consumer-repo-type-generation: backlog
+  epic-4-retrospective: optional
