@@ -5,10 +5,12 @@ session_topic: 'System Stability and Reliable Dashboard Reporting'
 session_goals: 'Increase system stability, ensure dashboard accuracy, reliable retry functionality, useful error messages'
 selected_approach: 'ai-recommended'
 techniques_used: ['Failure Analysis', 'Reverse Brainstorming', 'SCAMPER Method']
-stepsCompleted: [1, 2, 3]
+stepsCompleted: [1, 2, 3, 4]
 techniques_used: ['Failure Analysis', 'Reverse Brainstorming', 'SCAMPER Method']
 ideas_generated: []
 technique_execution_complete: true
+session_active: false
+workflow_completed: true
 ---
 
 # Brainstorming Session Results
@@ -109,6 +111,31 @@ We have dissected the instability (Failure Analysis), identified fragility (Reve
 - **Notifications:** Centralized email alerts via Unified API.
 
 **Overall Creative Journey:** The session moved from frustration with instability to a clear, architectural understanding of *why* it's unstable and *how* to fix it fundamentally.
+
+## Idea Organization and Prioritization
+
+**Thematic Organization:**
+
+**Theme 1: Robust Ingestion (The Foundation)**
+*Focus: Ensuring the system accepts valid files and rejects/handles invalid ones without crashing.*
+- **Ideas:**
+    - Sanitize filenames (handle emojis, spaces).
+    - Preserve directory structure (Course/Week/Module).
+    - Handle duplicate filenames in different folders.
+
+**Theme 2: Self-Healing State (The Stability)**
+*Focus: Ensuring Redis and Disk never drift apart.*
+- **Ideas:**
+    - **Boot Reconciliation:** Scan Redis on startup and kill "processing" jobs that have no active worker.
+    - **Disaster Recovery:** Rebuild state from disk (Inbox/_failed/_completed folders) if Redis is wiped.
+    - **Idempotent Re-ingest:** "Retry" button triggers a fresh ingestion, not a resume.
+
+**Theme 3: Actionable Observability (The UX)**
+*Focus: Telling the user exactly what is wrong and how to fix it.*
+- **Ideas:**
+    - Contextual Error Messages (e.g., "File not found", not "Error 500").
+    - Centralized Email Notifications via Unified API.
+
 
 
 

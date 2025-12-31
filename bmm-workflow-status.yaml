@@ -30,7 +30,7 @@ workflow_status:
     
   - id: "brainstorm-project"
     name: "Brainstorm"
-    status: "required"
+    status: "_bmad-output/analysis/brainstorming-session-2025-12-30.md"
     agent: "analyst"
     command: "brainstorm-project"
 
