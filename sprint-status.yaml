@@ -62,9 +62,9 @@ development_status:
   epic-2-retrospective: optional
 
   # Epic 3: Dashboard Data Accuracy
-  epic-3: backlog
-  3-1-implement-accurate-pagination-with-getjobcounts: backlog
-  3-2-implement-dynamic-healthstatus-computation: backlog
+  epic-3: in-progress
+  3-1-implement-accurate-pagination-with-getjobcounts: done
+  3-2-implement-dynamic-healthstatus-computation: done
   epic-3-retrospective: optional
 
   # Epic 4: API Contracts & Integration

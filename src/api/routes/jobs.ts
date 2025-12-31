@@ -52,7 +52,7 @@ async function computeHealthStatus(job: Job): Promise<HealthStatus> {
   }
 
   // Normal healthy state
-  if (state === 'completed' || state === 'active' || state === 'waiting') {
+  if (state === 'completed' || state === 'active' || state === 'waiting' || state === 'delayed') {
     return HealthStatus.Healthy;
   }
 
@@ -199,7 +199,15 @@ export async function jobRoutes(
           properties: {
             success: { type: 'boolean' },
             data: { type: 'array' },
-            pagination: { type: 'object' },
+            pagination: {
+              type: 'object',
+              properties: {
+                page: { type: 'number' },
+                limit: { type: 'number' },
+                total: { type: 'number' },
+                totalPages: { type: 'number' },
+              },
+            },
             timestamp: { type: 'string' },
             requestId: { type: 'string' },
           },
@@ -245,6 +253,7 @@ export async function jobRoutes(
       success: true,
       data: await Promise.all(jobs.map(async job => {
         const state = await job.getState();
+        const healthStatus = await computeHealthStatus(job);
         let jobStatus = 'pending';
 
         if (state === 'completed') {
@@ -267,6 +276,7 @@ export async function jobRoutes(
           attempts: job.attemptsMade,
           error: job.failedReason || null,
           fileSize: job.data.fileSize || null,
+          healthStatus,
         };
       })),
       pagination: {

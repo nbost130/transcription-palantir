@@ -292,7 +292,8 @@ export class TranscriptionQueue {
       'active',
       'completed',
       'failed',
-      'delayed'
+      'delayed',
+      'paused'
     );
 
     const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
@@ -303,6 +304,7 @@ export class TranscriptionQueue {
       completed: counts.completed || 0,
       failed: counts.failed || 0,
       delayed: counts.delayed || 0,
+      paused: counts.paused || 0,
       total,
     };
   }
@@ -344,14 +346,22 @@ export class TranscriptionQueue {
 
   async getAllJobs(start = 0, end = 100) {
     // Get jobs from all statuses
-    const [waiting, active, completed, failed] = await Promise.all([
+    // Note: This is a naive implementation that fetches 'limit' from EACH status
+    // and then combines them. Proper global pagination across statuses is difficult
+    // with BullMQ without fetching all job IDs.
+    // For now, we include all statuses to ensure nothing is missed.
+    const [waiting, active, completed, failed, delayed, paused] = await Promise.all([
       this.queue.getJobs(['waiting'], start, end),
       this.queue.getJobs(['active'], start, end),
       this.queue.getJobs(['completed'], start, end),
       this.queue.getJobs(['failed'], start, end),
+      this.queue.getJobs(['delayed'], start, end),
+      this.queue.getJobs(['paused'], start, end),
     ]);
 
-    return [...waiting, ...active, ...completed, ...failed];
+    // We sort by timestamp to try to give a somewhat consistent order
+    const allJobs = [...waiting, ...active, ...completed, ...failed, ...delayed, ...paused];
+    return allJobs.sort((a, b) => b.timestamp - a.timestamp);
   }
 
   // ===========================================================================
