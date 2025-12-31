@@ -22,6 +22,14 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+    env:
+      WHISPER_BINARY_PATH: /usr/bin/whisper
+      WHISPER_MODEL: tiny
+      WHISPER_COMPUTE_TYPE: int8
+      NODE_ENV: test
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+
     steps:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
