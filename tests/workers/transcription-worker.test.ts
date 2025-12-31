@@ -9,11 +9,15 @@ vi.mock('bullmq', () => ({
   Worker: vi.fn(),
   Job: vi.fn(),
 }));
-vi.mock('ioredis', () => ({
-  Redis: vi.fn().mockImplementation(() => ({
-    on: vi.fn(),
-  })),
-}));
+vi.mock('ioredis', () => {
+  return {
+    default: vi.fn(function () {
+      return {
+        on: vi.fn(),
+      };
+    }),
+  };
+});
 vi.mock('../../src/services/whisper.js', () => ({
   whisperService: {
     transcribeAudio: vi.fn(),
