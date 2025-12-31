@@ -6,7 +6,7 @@ import { appConfig } from '../../config/index.js';
 export async function systemRoutes(fastify: FastifyInstance) {
     // POST /system/reconcile
     // Manually trigger reconciliation process
-    fastify.post('/reconcile', async (request, reply) => {
+    fastify.post('/system/reconcile', async (request, reply) => {
         logger.info('Manual reconciliation triggered via API');
 
         try {
