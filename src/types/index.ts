@@ -5,10 +5,13 @@
  */
 
 import { z } from 'zod';
+import { HealthStatus } from './health-status.js';
 
 // =============================================================================
 // JOB TYPES
 // =============================================================================
+
+export { HealthStatus } from './health-status.js';
 
 export enum JobStatus {
   PENDING = 'pending',
@@ -42,6 +45,9 @@ export interface TranscriptionJob {
   attempts: number;
   maxAttempts: number;
   error?: string;
+  errorCode?: string;
+  errorReason?: string;
+  healthStatus?: HealthStatus;
   transcriptPath?: string;
   metadata: JobMetadata;
 }
