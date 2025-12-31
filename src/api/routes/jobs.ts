@@ -23,6 +23,7 @@ import {
 } from '../../types/index.js';
 import { randomUUID } from 'crypto';
 import { getMimeType } from '../../utils/file.js';
+import { atomicMove } from '../../utils/file-operations.js';
 import type { Job } from 'bullmq';
 
 // =============================================================================
@@ -786,31 +787,58 @@ export async function jobRoutes(
       });
     }
 
-    // Check if the job is in a failed state
+    // Check job state for idempotency and validation (Story 2.4)
     const state = await job.getState();
-    if (state !== 'failed') {
-      return reply.code(409).send({
+
+    // Idempotency: If job is already in a valid processing state, return success
+    if (state === 'waiting' || state === 'active') {
+      fastify.log.debug({ jobId, state }, 'Job is already in a valid state, skipping retry (idempotent)');
+      return {
+        success: true,
+        data: {
+          jobId,
+          message: `Job is already ${state}, no retry needed`,
+          state,
+        },
+        timestamp: new Date().toISOString(),
+        requestId: request.id,
+      };
+    }
+
+    // Prevent retry of completed jobs
+    if (state === 'completed') {
+      return reply.code(400).send({
         success: false,
-        error: `Job ${jobId} is not in the failed state. Current state: ${state}`,
+        error: 'Cannot retry a completed job. Consider deleting and re-uploading the file instead.',
         timestamp: new Date().toISOString(),
         requestId: request.id,
       });
     }
 
-    // Check if the input file exists
+    // Only proceed with retry for failed jobs
+    if (state !== 'failed') {
+      return reply.code(409).send({
+        success: false,
+        error: `Job ${jobId} cannot be retried. Current state: ${state}`,
+        timestamp: new Date().toISOString(),
+        requestId: request.id,
+      });
+    }
+
+    // Check if the input file exists and recover if needed
     if (job.data.filePath) {
       try {
         await fs.access(job.data.filePath);
       } catch (error) {
-        // Try to recover from failed directory
+        // Try to recover from failed directory using atomicMove (Story 2.4)
         try {
           const relativePath = relative(appConfig.processing.watchDirectory, job.data.filePath);
           const failedPath = join(appConfig.processing.failedDirectory, relativePath);
 
           await fs.access(failedPath);
 
-          // Move back to original location
-          await fs.rename(failedPath, job.data.filePath);
+          // Move back to original location using atomicMove for cross-filesystem safety
+          await atomicMove(failedPath, job.data.filePath);
           fastify.log.info({ jobId, from: failedPath, to: job.data.filePath }, 'Restored file from failed directory for retry');
         } catch (recoveryError) {
           return reply.code(400).send({
@@ -824,6 +852,14 @@ export async function jobRoutes(
     }
 
     try {
+      // Clear error fields before retrying (Story 2.4 requirement)
+      await job.updateData({
+        ...job.data,
+        errorCode: undefined,
+        errorReason: undefined,
+      });
+
+      // Re-inject job into queue
       await transcriptionQueue.retryJob(jobId);
 
       const response: ApiResponse = {
