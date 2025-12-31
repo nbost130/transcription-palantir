@@ -16,6 +16,7 @@ import { whisperService } from '../services/whisper.js';
 import { fasterWhisperService } from '../services/faster-whisper.js';
 import { fileTracker } from '../services/file-tracker.js';
 import type { TranscriptionJob } from '../types/index.js';
+import { ErrorCodes, TranscriptionError, getErrorReason, type ErrorCode } from '../types/index.js';
 
 // =============================================================================
 // REDIS CONNECTION
@@ -90,9 +91,38 @@ export class TranscriptionWorker {
       return;
     }
 
+    // Log graceful shutdown initiation (Story 2.7)
+    logger.info('Graceful shutdown initiated');
+
     try {
       if (this.worker) {
-        await this.worker.close();
+        // Create timeout promise (Story 2.7: force-exit after 60 seconds)
+        const SHUTDOWN_TIMEOUT_MS = 60000;
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('Graceful shutdown timeout'));
+          }, SHUTDOWN_TIMEOUT_MS);
+        });
+
+        // Race between graceful shutdown and timeout
+        try {
+          await Promise.race([
+            this.worker.close(), // Waits for current job to complete
+            timeoutPromise,
+          ]);
+        } catch (error: any) {
+          if (error.message === 'Graceful shutdown timeout') {
+            logger.warn('Graceful shutdown timeout, forcing exit');
+            // Force close without waiting
+            await this.worker.close(true);
+            this.worker = null;
+            await redisConnection.quit();
+            this.isRunning = false;
+            process.exit(1);
+          }
+          throw error;
+        }
+
         this.worker = null;
       }
 
@@ -100,12 +130,13 @@ export class TranscriptionWorker {
 
       this.isRunning = false;
 
+      // Log graceful shutdown completion (Story 2.7)
       logger.info(
         {
           processedJobs: this.processedJobs,
           failedJobs: this.failedJobs,
         },
-        '✅ Transcription worker stopped gracefully'
+        'Graceful shutdown complete'
       );
     } catch (error) {
       logger.error({ error }, 'Error stopping transcription worker');
@@ -241,19 +272,43 @@ export class TranscriptionWorker {
         processingTime,
         completedAt: new Date().toISOString(),
       };
-    } catch (error) {
+    } catch (error: any) {
+      // Determine error code and reason (Story 2.5)
+      let errorCode: ErrorCode;
+      let errorReason: string;
+
+      if (error instanceof TranscriptionError) {
+        // Use error code from TranscriptionError
+        errorCode = error.errorCode;
+        errorReason = error.errorReason;
+      } else {
+        // Unknown error - use generic error code
+        errorCode = ErrorCodes.SYSTEM_UNKNOWN;
+        errorReason = error.message || String(error);
+      }
+
       logger.error(
         {
           jobId: job.id,
           fileName: jobData.fileName,
           error,
+          errorCode,
+          errorReason,
         },
         '❌ Transcription failed'
       );
 
+      // Update job with error code and reason (Story 2.5 requirement)
+      await job.updateData({
+        ...jobData,
+        errorCode,
+        errorReason,
+      });
+
       // Move failed file
       await this.moveFailedFile(jobData.filePath).catch(() => { });
 
+      // Re-throw to mark job as failed
       throw error;
     }
   }
@@ -307,9 +362,30 @@ export class TranscriptionWorker {
 
       return transcriptPath;
 
-    } catch (error) {
+    } catch (error: any) {
       logger.error({ error, inputPath }, 'Whisper.cpp transcription failed');
-      throw error; // Re-throw the error to fail the job properly
+
+      // Map Whisper errors to specific error codes (Story 2.5)
+      const errorMessage = error.message || String(error);
+
+      // Check for specific error patterns
+      if (errorMessage.includes('Python script failed with code')) {
+        // Extract exit code from error message
+        const match = errorMessage.match(/code (\d+)/);
+        const exitCode = match ? parseInt(match[1], 10) : undefined;
+        throw TranscriptionError.fromCode(ErrorCodes.WHISPER_CRASH, { exitCode, originalError: errorMessage });
+      } else if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
+        throw TranscriptionError.fromCode(ErrorCodes.WHISPER_TIMEOUT, { originalError: errorMessage });
+      } else if (errorMessage.includes('Failed to spawn') || errorMessage.includes('ENOENT')) {
+        throw TranscriptionError.fromCode(ErrorCodes.WHISPER_NOT_FOUND, { originalError: errorMessage });
+      } else if (errorMessage.includes('Failed to read transcription output') || errorMessage.includes('empty')) {
+        throw TranscriptionError.fromCode(ErrorCodes.WHISPER_INVALID_OUTPUT, { originalError: errorMessage });
+      } else if (errorMessage.includes('corrupted') || errorMessage.includes('invalid format')) {
+        throw TranscriptionError.fromCode(ErrorCodes.FILE_INVALID, { originalError: errorMessage });
+      } else {
+        // Unknown Whisper error
+        throw TranscriptionError.fromCode(ErrorCodes.SYSTEM_UNKNOWN, { originalError: errorMessage });
+      }
     }
   }
 
@@ -362,8 +438,15 @@ To enable real transcription:
   private async validateInputFile(filePath: string): Promise<void> {
     try {
       await access(filePath, constants.R_OK);
-    } catch (error) {
-      throw new Error(`Input file not accessible: ${filePath}`);
+    } catch (error: any) {
+      // Determine specific error code based on error type
+      if (error.code === 'ENOENT') {
+        throw TranscriptionError.fromCode(ErrorCodes.FILE_NOT_FOUND, { filePath });
+      } else if (error.code === 'EACCES') {
+        throw TranscriptionError.fromCode(ErrorCodes.FILE_NOT_READABLE, { filePath });
+      } else {
+        throw TranscriptionError.fromCode(ErrorCodes.FILE_INVALID, { filePath, originalError: error.message });
+      }
     }
   }
 

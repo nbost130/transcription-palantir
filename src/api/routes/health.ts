@@ -8,6 +8,7 @@ import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { access, constants } from 'fs/promises';
 import { transcriptionQueue } from '../../services/queue.js';
 import { fileWatcher } from '../../services/file-watcher.js';
+import { fasterWhisperService } from '../../services/faster-whisper.js';
 import { appConfig } from '../../config/index.js';
 import type { SystemHealth, ServiceHealth } from '../../types/index.js';
 
@@ -139,7 +140,7 @@ export async function healthRoutes(
 
   fastify.get('/health/detailed', {
     schema: {
-      description: 'Detailed system health with metrics',
+      description: 'Detailed system health with metrics (Story 2.6)',
       tags: ['health'],
       response: {
         200: {
@@ -149,6 +150,10 @@ export async function healthRoutes(
             timestamp: { type: 'string' },
             uptime: { type: 'number' },
             version: { type: 'string' },
+            whisperBinaryStatus: { type: 'string' },
+            whisperVersion: { type: ['string', 'null'] },
+            redisStatus: { type: 'string' },
+            queueStats: { type: 'object' },
             services: { type: 'array' },
             metrics: { type: 'object' },
           },
@@ -157,6 +162,12 @@ export async function healthRoutes(
     },
   }, async (request, reply) => {
     const services: ServiceHealth[] = [];
+
+    // Check Whisper binary status (Story 2.6)
+    const whisperHealth = await fasterWhisperService.getHealthStatus();
+
+    // Check Redis status (Story 2.6)
+    const redisStatus = transcriptionQueue.isReady ? 'connected' : 'disconnected';
 
     // Check Queue Service
     const queueStartTime = Date.now();
@@ -212,19 +223,23 @@ export async function healthRoutes(
       });
     }
 
-    // Get queue statistics
+    // Get queue statistics (Story 2.6 format)
     let queueStats = {
       waiting: 0,
-      active: 0,
+      processing: 0,
       completed: 0,
       failed: 0,
-      delayed: 0,
-      total: 0,
     };
 
     try {
       if (transcriptionQueue.isReady) {
-        queueStats = await transcriptionQueue.getQueueStats();
+        const stats = await transcriptionQueue.getQueueStats();
+        queueStats = {
+          waiting: stats.waiting,
+          processing: stats.active,
+          completed: stats.completed,
+          failed: stats.failed,
+        };
       }
     } catch (error) {
       // Stats unavailable
@@ -234,17 +249,31 @@ export async function healthRoutes(
     const memUsage = process.memoryUsage();
     const cpuUsage = process.cpuUsage();
 
-    const health: SystemHealth = {
-      status: services.every(s => s.status === 'up') ? 'healthy' : 'unhealthy',
+    // Determine overall health status (Story 2.6)
+    const isHealthy = services.every(s => s.status === 'up') &&
+      whisperHealth.whisperBinaryStatus === 'available' &&
+      redisStatus === 'connected';
+
+    const health: SystemHealth & {
+      whisperBinaryStatus: 'available' | 'missing';
+      whisperVersion: string | null;
+      redisStatus: 'connected' | 'disconnected';
+      queueStats: typeof queueStats;
+    } = {
+      status: isHealthy ? 'healthy' : 'unhealthy',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       version: '1.0.0',
+      whisperBinaryStatus: whisperHealth.whisperBinaryStatus,
+      whisperVersion: whisperHealth.whisperVersion,
+      redisStatus,
+      queueStats,
       services,
       metrics: {
         jobs: {
-          total: queueStats.total,
+          total: queueStats.waiting + queueStats.processing + queueStats.completed + queueStats.failed,
           pending: queueStats.waiting,
-          processing: queueStats.active,
+          processing: queueStats.processing,
           completed: queueStats.completed,
           failed: queueStats.failed,
         },
@@ -259,7 +288,7 @@ export async function healthRoutes(
           diskUsage: 0, // TODO: Implement disk usage tracking
         },
         queue: {
-          size: queueStats.waiting + queueStats.active,
+          size: queueStats.waiting + queueStats.processing,
           throughput: 0, // TODO: Calculate throughput
           avgProcessingTime: 0, // TODO: Calculate average processing time
         },

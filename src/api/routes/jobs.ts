@@ -16,12 +16,49 @@ import {
   PaginationSchema,
   JobStatus,
   JobPriority,
+  HealthStatus,
   type TranscriptionJob,
   type ApiResponse,
   type PaginatedResponse,
 } from '../../types/index.js';
 import { randomUUID } from 'crypto';
 import { getMimeType } from '../../utils/file.js';
+import { atomicMove } from '../../utils/file-operations.js';
+import type { Job } from 'bullmq';
+
+// =============================================================================
+// HELPER FUNCTIONS
+// =============================================================================
+
+/**
+ * Compute health status dynamically based on job state
+ */
+async function computeHealthStatus(job: Job): Promise<HealthStatus> {
+  const state = await job.getState();
+
+  // Check if job is stalled (processing for too long without progress)
+  const now = Date.now();
+  const processingTime = job.processedOn ? now - job.processedOn : 0;
+  const isStalled = state === 'active' && processingTime > appConfig.processing.stalledInterval;
+
+  if (isStalled) {
+    return HealthStatus.Stalled;
+  }
+
+  // Check if job recovered from failure
+  const wasRecovered = job.attemptsMade > 0 && state === 'completed';
+  if (wasRecovered) {
+    return HealthStatus.Recovered;
+  }
+
+  // Normal healthy state
+  if (state === 'completed' || state === 'active' || state === 'waiting') {
+    return HealthStatus.Healthy;
+  }
+
+  // Unknown for other states
+  return HealthStatus.Unknown;
+}
 
 // =============================================================================
 // JOB ROUTES
@@ -195,8 +232,9 @@ export async function jobRoutes(
       total = await transcriptionQueue.queueInstance.getJobCountByTypes(bullStatus);
     } else {
       // Get all jobs (combined from all statuses)
-      const stats = await transcriptionQueue.getQueueStats();
-      total = stats.total;
+      // Use getJobCounts() for accurate pagination total (Story 2.3 requirement)
+      const counts = await transcriptionQueue.getJobCounts();
+      total = counts.total;
 
       const start = (validated.page - 1) * validated.limit;
       const end = start + validated.limit - 1;
@@ -314,6 +352,7 @@ export async function jobRoutes(
     }
 
     const state = await job.getState();
+    const healthStatus = await computeHealthStatus(job);
 
     const response: ApiResponse = {
       success: true,
@@ -325,6 +364,9 @@ export async function jobRoutes(
         progress: job.progress,
         attemptsMade: job.attemptsMade,
         failedReason: job.failedReason,
+        errorCode: job.data.errorCode || null,
+        errorReason: job.data.errorReason || job.failedReason || null,
+        healthStatus,
         stacktrace: job.stacktrace,
         returnvalue: job.returnvalue,
         finishedOn: job.finishedOn,
@@ -616,6 +658,50 @@ export async function jobRoutes(
   }, async (request, reply) => {
     const { jobId } = request.params;
 
+    // Get job before deletion to access file paths
+    const job = await transcriptionQueue.getJob(jobId);
+
+    if (!job) {
+      return reply.code(404).send({
+        success: false,
+        error: 'Job not found',
+        timestamp: new Date().toISOString(),
+        requestId: request.id,
+      });
+    }
+
+    // Delete associated artifacts
+    const artifactsDeleted: string[] = [];
+    const artifactsFailed: string[] = [];
+
+    // Delete audio file if it exists
+    if (job.data.filePath) {
+      try {
+        await fs.unlink(job.data.filePath);
+        artifactsDeleted.push(job.data.filePath);
+      } catch (error: any) {
+        if (error.code !== 'ENOENT') {
+          // Only log if error is not "file not found"
+          fastify.log.warn({ error, path: job.data.filePath }, 'Failed to delete audio file');
+          artifactsFailed.push(job.data.filePath);
+        }
+      }
+    }
+
+    // Delete transcript file if it exists
+    if (job.data.transcriptPath) {
+      try {
+        await fs.unlink(job.data.transcriptPath);
+        artifactsDeleted.push(job.data.transcriptPath);
+      } catch (error: any) {
+        if (error.code !== 'ENOENT') {
+          fastify.log.warn({ error, path: job.data.transcriptPath }, 'Failed to delete transcript file');
+          artifactsFailed.push(job.data.transcriptPath);
+        }
+      }
+    }
+
+    // Remove job from queue
     await transcriptionQueue.removeJob(jobId);
 
     const response: ApiResponse = {
@@ -623,6 +709,9 @@ export async function jobRoutes(
       data: {
         jobId,
         message: 'Job deleted successfully',
+        artifactsDeleted: artifactsDeleted.length,
+        artifactsFailed: artifactsFailed.length,
+        deletedPaths: artifactsDeleted,
       },
       timestamp: new Date().toISOString(),
       requestId: request.id,
@@ -698,31 +787,58 @@ export async function jobRoutes(
       });
     }
 
-    // Check if the job is in a failed state
+    // Check job state for idempotency and validation (Story 2.4)
     const state = await job.getState();
-    if (state !== 'failed') {
-      return reply.code(409).send({
+
+    // Idempotency: If job is already in a valid processing state, return success
+    if (state === 'waiting' || state === 'active') {
+      fastify.log.debug({ jobId, state }, 'Job is already in a valid state, skipping retry (idempotent)');
+      return {
+        success: true,
+        data: {
+          jobId,
+          message: `Job is already ${state}, no retry needed`,
+          state,
+        },
+        timestamp: new Date().toISOString(),
+        requestId: request.id,
+      };
+    }
+
+    // Prevent retry of completed jobs
+    if (state === 'completed') {
+      return reply.code(400).send({
         success: false,
-        error: `Job ${jobId} is not in the failed state. Current state: ${state}`,
+        error: 'Cannot retry a completed job. Consider deleting and re-uploading the file instead.',
         timestamp: new Date().toISOString(),
         requestId: request.id,
       });
     }
 
-    // Check if the input file exists
+    // Only proceed with retry for failed jobs
+    if (state !== 'failed') {
+      return reply.code(409).send({
+        success: false,
+        error: `Job ${jobId} cannot be retried. Current state: ${state}`,
+        timestamp: new Date().toISOString(),
+        requestId: request.id,
+      });
+    }
+
+    // Check if the input file exists and recover if needed
     if (job.data.filePath) {
       try {
         await fs.access(job.data.filePath);
       } catch (error) {
-        // Try to recover from failed directory
+        // Try to recover from failed directory using atomicMove (Story 2.4)
         try {
           const relativePath = relative(appConfig.processing.watchDirectory, job.data.filePath);
           const failedPath = join(appConfig.processing.failedDirectory, relativePath);
 
           await fs.access(failedPath);
 
-          // Move back to original location
-          await fs.rename(failedPath, job.data.filePath);
+          // Move back to original location using atomicMove for cross-filesystem safety
+          await atomicMove(failedPath, job.data.filePath);
           fastify.log.info({ jobId, from: failedPath, to: job.data.filePath }, 'Restored file from failed directory for retry');
         } catch (recoveryError) {
           return reply.code(400).send({
@@ -736,6 +852,14 @@ export async function jobRoutes(
     }
 
     try {
+      // Clear error fields before retrying (Story 2.4 requirement)
+      await job.updateData({
+        ...job.data,
+        errorCode: undefined,
+        errorReason: undefined,
+      });
+
+      // Re-inject job into queue
       await transcriptionQueue.retryJob(jobId);
 
       const response: ApiResponse = {

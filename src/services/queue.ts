@@ -282,6 +282,31 @@ export class TranscriptionQueue {
     };
   }
 
+  /**
+   * Get accurate job counts using BullMQ's native count methods
+   * More efficient than fetching all jobs and counting
+   */
+  async getJobCounts() {
+    const counts = await this.queue.getJobCounts(
+      'waiting',
+      'active',
+      'completed',
+      'failed',
+      'delayed'
+    );
+
+    const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+
+    return {
+      waiting: counts.waiting || 0,
+      active: counts.active || 0,
+      completed: counts.completed || 0,
+      failed: counts.failed || 0,
+      delayed: counts.delayed || 0,
+      total,
+    };
+  }
+
   async getJobs(status: JobStatus, start = 0, end = 19) {
     if (status === JobStatus.PENDING) {
       // For pending jobs, we need to combine delayed and waiting queues
