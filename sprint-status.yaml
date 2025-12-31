@@ -54,7 +54,7 @@ development_status:
   epic-2: in-progress
   2-1-implement-filename-sanitization-on-ingestion: done
   2-2-implement-duplicate-file-prevention: done
-  2-3-enhance-job-crud-endpoints: backlog
+  2-3-enhance-job-crud-endpoints: done
   2-4-implement-robust-retry-logic: backlog
   2-5-implement-error-code-and-reason-tracking: backlog
   2-6-implement-system-health-endpoint: backlog
