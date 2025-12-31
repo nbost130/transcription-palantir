@@ -236,8 +236,8 @@ export class ApiServer {
     // System information routes
     fastify.register(systemRoutes, { prefix });
 
-    // Metrics routes (Prometheus)
-    fastify.register(metricsRoutes, { prefix });
+    // Metrics routes (Prometheus) - TODO: Implement prometheus service first
+    // fastify.register(metricsRoutes, { prefix });
 
     // Monitoring dashboard routes
     fastify.register(monitorRoutes, { prefix });
