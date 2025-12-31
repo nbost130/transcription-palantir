@@ -1,6 +1,6 @@
 import { readdir, unlink } from 'fs/promises';
 import { join, parse } from 'path';
-import { AppConfig } from '../config/schema';
+import { AppConfig } from '../types/index.js';
 import { TranscriptionQueue } from './queue';
 import { logger } from '../utils/logger';
 
@@ -36,7 +36,7 @@ export class ReconciliationService {
 
         try {
             // 1. Scan Inbox
-            const files = await readdir(this.config.WATCH_DIRECTORY);
+            const files = await readdir(this.config.processing.watchDirectory);
             const mp3Files = files.filter(f => f.toLowerCase().endsWith('.mp3'));
             report.filesScanned = mp3Files.length;
 
@@ -44,14 +44,14 @@ export class ReconciliationService {
             // We need to check both Waiting and Processing states
             // Note: This is an approximation. For perfect accuracy we'd need to check all jobs,
             // but checking active ones is usually sufficient for boot recovery.
-            const activeJobs = await this.queue.getQueue().getJobs(['waiting', 'processing', 'active', 'delayed']);
+            const activeJobs = await this.queue.queueInstance.getJobs(['waiting', 'active', 'delayed']);
 
             // Create a map of normalized filenames to job IDs for quick lookup
             // We assume job.data.originalName or job.name holds the filename
             const trackedFiles = new Set<string>();
             for (const job of activeJobs) {
-                if (job.data && job.data.filename) {
-                    trackedFiles.add(job.data.filename);
+                if (job.data && job.data.fileName) {
+                    trackedFiles.add(job.data.fileName);
                 }
             }
 
@@ -61,7 +61,7 @@ export class ReconciliationService {
                     // Orphaned file found!
                     logger.warn(`[SELF-HEAL] Found orphaned file: ${filename}. Creating job...`);
 
-                    await this.queue.addJob(filename);
+                    await this.queue.addJob({ fileName: filename });
                     report.jobsCreated++;
 
                     // 4. Cleanup partial outputs (if any existed from a previous attempt)
@@ -89,7 +89,7 @@ export class ReconciliationService {
 
         for (const ext of extensions) {
             const outputName = `${baseName}${ext}`;
-            const outputPath = join(this.config.OUTPUT_DIRECTORY, outputName);
+            const outputPath = join(this.config.processing.outputDirectory, outputName);
 
             try {
                 await unlink(outputPath);
