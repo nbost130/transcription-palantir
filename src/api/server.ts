@@ -16,7 +16,7 @@ import { appConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { healthRoutes } from './routes/health.js';
 import { jobRoutes } from './routes/jobs.js';
-import { metricsRoutes } from './routes/metrics.js';
+// import { metricsRoutes } from './routes/metrics.js'; // TODO: Implement prometheus service first
 import { monitorRoutes } from './routes/monitor.js';
 import { websocketRoutes } from './routes/websocket.js';
 import servicesRoutes from './routes/services.js';

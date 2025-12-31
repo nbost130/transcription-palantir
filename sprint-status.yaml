@@ -41,7 +41,7 @@ story_location: _bmad-output/stories
 
 development_status:
   # Epic 1: Self-Healing Boot & Recovery
-  epic-1: in-progress
+  epic-1: done
   1-1-create-healthstatus-enum-and-types: done
   1-2-create-atomic-file-operations-utility: done
   1-3-create-reconciliationservice: done
@@ -51,9 +51,9 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Reliable Job Processing
-  epic-2: backlog
-  2-1-implement-filename-sanitization-on-ingestion: backlog
-  2-2-implement-duplicate-file-prevention: backlog
+  epic-2: in-progress
+  2-1-implement-filename-sanitization-on-ingestion: done
+  2-2-implement-duplicate-file-prevention: done
   2-3-enhance-job-crud-endpoints: backlog
   2-4-implement-robust-retry-logic: backlog
   2-5-implement-error-code-and-reason-tracking: backlog
