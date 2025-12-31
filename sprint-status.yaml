@@ -51,8 +51,8 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Reliable Job Processing
-  epic-2: backlog
-  2-1-implement-filename-sanitization-on-ingestion: backlog
+  epic-2: in-progress
+  2-1-implement-filename-sanitization-on-ingestion: done
   2-2-implement-duplicate-file-prevention: backlog
   2-3-enhance-job-crud-endpoints: backlog
   2-4-implement-robust-retry-logic: backlog
