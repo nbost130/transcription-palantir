@@ -12,6 +12,7 @@ import { HealthStatus } from './health-status.js';
 // =============================================================================
 
 export { HealthStatus } from './health-status.js';
+export { ErrorCodes, TranscriptionError, getErrorReason, type ErrorCode } from './error-codes.js';
 
 export enum JobStatus {
   PENDING = 'pending',
