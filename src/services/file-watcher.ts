@@ -13,7 +13,6 @@ import { appConfig } from '../config/index.js';
 import { transcriptionQueue } from './queue.js';
 import { fileTracker } from './file-tracker.js';
 import { JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js';
-import { randomUUID } from 'crypto';
 import { getMimeType } from '../utils/file.js';
 
 // =============================================================================
@@ -312,7 +311,10 @@ export class FileWatcherService {
 
   private async createJobForFile(filePath: string, metadata: FileMetadata): Promise<void> {
     try {
-      const jobId = randomUUID();
+      // Generate deterministic job ID based on file content/metadata
+      // This prevents duplicate jobs for the exact same file
+      const jobId = this.generateJobId(filePath, metadata);
+
       const jobData: Partial<TranscriptionJob> = {
         id: jobId,
         fileName: metadata.fileName,
@@ -333,20 +335,31 @@ export class FileWatcherService {
         },
       };
 
-      const job = await transcriptionQueue.addJob(jobData);
+      try {
+        const job = await transcriptionQueue.addJob(jobData);
 
-      // Mark file as processed in persistent storage
-      await fileTracker.markProcessed(filePath, jobId);
+        // Check if we got back an existing job (duplicate)
+        // Note: BullMQ returns the job instance. If it was a duplicate, 
+        // the timestamp might be older.
+        // However, standard BullMQ behavior with jobId is to return the existing job.
 
-      logger.info(
-        {
-          jobId: job.id,
-          fileName: metadata.fileName,
-          fileSize: `${metadata.fileSizeMB.toFixed(2)}MB`,
-          priority: metadata.priority,
-        },
-        '✅ Transcription job created'
-      );
+        // Mark file as processed in persistent storage
+        await fileTracker.markProcessed(filePath, jobId);
+
+        logger.info(
+          {
+            jobId: job.id,
+            fileName: metadata.fileName,
+            fileSize: `${metadata.fileSizeMB.toFixed(2)}MB`,
+            priority: metadata.priority,
+          },
+          '✅ Transcription job created (or existing job returned)'
+        );
+      } catch (error: any) {
+        // Handle case where job might already exist but in a state that causes error
+        logger.warn({ error, jobId }, 'Error adding job to queue (possible duplicate)');
+        throw error;
+      }
     } catch (error) {
       logger.error(
         {
@@ -358,6 +371,14 @@ export class FileWatcherService {
       );
       throw error;
     }
+  }
+
+  private generateJobId(filePath: string, metadata: FileMetadata): string {
+    const { createHash } = require('crypto');
+    // Create a unique hash based on file path, size, and modification time
+    // If any of these change, it's considered a new version of the file
+    const input = `${filePath}:${metadata.fileSize}:${metadata.modifiedAt.getTime()}`;
+    return createHash('md5').update(input).digest('hex');
   }
 
   // ===========================================================================

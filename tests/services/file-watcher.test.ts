@@ -117,4 +117,25 @@ describe('FileWatcherService', () => {
         // Should proceed to process the original file since rename failed
         expect(transcriptionQueue.addJob).toHaveBeenCalled();
     });
+
+    it('should generate deterministic job IDs for the same file', async () => {
+        const filePath = '/test/watch/duplicate.mp3';
+
+        // First call
+        await (watcher as any).handleFileAdded(filePath);
+        const firstCallArgs = (transcriptionQueue.addJob as any).mock.calls[0][0];
+        const firstJobId = firstCallArgs.id;
+
+        // Reset mocks but keep the same file stats
+        (transcriptionQueue.addJob as any).mockClear();
+        (fileTracker.isProcessed as any).mockResolvedValue(false); // Simulate not processed yet to trigger job creation logic
+
+        // Second call
+        await (watcher as any).handleFileAdded(filePath);
+        const secondCallArgs = (transcriptionQueue.addJob as any).mock.calls[0][0];
+        const secondJobId = secondCallArgs.id;
+
+        expect(firstJobId).toBeDefined();
+        expect(firstJobId).toBe(secondJobId);
+    });
 });
