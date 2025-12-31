@@ -87,6 +87,15 @@ describe('Pagination Integration Tests', () => {
     });
 
     test('GET /jobs should filter by status and return correct counts', async () => {
+        // Clean queue to ensure we only count jobs added in this test
+        await transcriptionQueue.queueInstance.drain();
+        await transcriptionQueue.queueInstance.clean(0, 1000, 'completed');
+        await transcriptionQueue.queueInstance.clean(0, 1000, 'failed');
+        await transcriptionQueue.queueInstance.clean(0, 1000, 'delayed');
+        await transcriptionQueue.queueInstance.clean(0, 1000, 'wait');
+        await transcriptionQueue.queueInstance.clean(0, 1000, 'active');
+        await transcriptionQueue.queueInstance.clean(0, 1000, 'paused');
+
         // Add 5 waiting jobs
         for (let i = 0; i < 5; i++) {
             await transcriptionQueue.addJob({
@@ -111,10 +120,34 @@ describe('Pagination Integration Tests', () => {
         // But getJobs(PENDING) fetches both delayed and waiting.
         // Let's verify what the API returns.
 
+        // Debug counts
+        // const counts = await transcriptionQueue.getJobCounts();
+        // console.error('DEBUG: Job Counts:', JSON.stringify(counts, null, 2));
+
         const response = await fetch(`${BASE_URL}/api/v1/jobs?status=${JobStatus.PENDING}`);
         const data = await response.json();
 
         expect(response.status).toBe(200);
+        expect(data.success).toBe(true);
+
+        // PENDING now includes both 'waiting' and 'delayed'
+        // We added 5 waiting jobs (which become delayed due to priority)
+        // And we added 3 delayed jobs explicitly.
+        // So total should be 8.
+        expect(data.pagination.total).toBe(8);
+
+        // But the list will contain delayed jobs too if they are returned by getJobs(PENDING)
+        // and fit in the limit (default 20).
+        // Actually, let's check what getJobs(PENDING) returns.
+        // It returns [...delayed, ...waiting].
+        // So we expect 8 items in the data array.
+        expect(data.data.length).toBe(8);
+
+        // Verify statuses
+        const statuses = data.data.map((j: any) => j.status);
+        // PENDING jobs are mapped to 'pending' in the API response
+        expect(statuses.every((s: string) => s === 'pending')).toBe(true);
+
         // The current implementation of GET /jobs with status=pending uses:
         // total = await transcriptionQueue.queueInstance.getJobCountByTypes('waiting');
         // So it might only count waiting jobs (5), not delayed (3).
@@ -131,10 +164,6 @@ describe('Pagination Integration Tests', () => {
         // For now, let's just assert what we expect based on current code:
         // It will likely return total=5 (waiting only).
         // But data might include delayed jobs if they are in the first page?
-        // queue.ts:317 fetches both.
-
-        // If the code is inconsistent, this test will reveal it.
-        // I suspect total will be 5, but data might have 8 items if limit is high enough?
         // Wait, if total is 5, and we request limit 20, we might get more than total?
         // That would be a bug in pagination metadata.
     });

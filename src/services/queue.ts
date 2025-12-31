@@ -346,22 +346,49 @@ export class TranscriptionQueue {
 
   async getAllJobs(start = 0, end = 100) {
     // Get jobs from all statuses
-    // Note: This is a naive implementation that fetches 'limit' from EACH status
-    // and then combines them. Proper global pagination across statuses is difficult
-    // with BullMQ without fetching all job IDs.
-    // For now, we include all statuses to ensure nothing is missed.
+    // To ensure accurate global pagination by timestamp, we must fetch the top 'end' jobs
+    // from EACH status, combine them, sort, and then take the requested slice.
+    // Fetching from 'start' to 'end' per status is incorrect because the Nth job globally
+    // might be the 1st job in a specific queue.
     const [waiting, active, completed, failed, delayed, paused] = await Promise.all([
-      this.queue.getJobs(['waiting'], start, end),
-      this.queue.getJobs(['active'], start, end),
-      this.queue.getJobs(['completed'], start, end),
-      this.queue.getJobs(['failed'], start, end),
-      this.queue.getJobs(['delayed'], start, end),
-      this.queue.getJobs(['paused'], start, end),
+      this.queue.getJobs(['waiting'], 0, end),
+      this.queue.getJobs(['active'], 0, end),
+      this.queue.getJobs(['completed'], 0, end),
+      this.queue.getJobs(['failed'], 0, end),
+      this.queue.getJobs(['delayed'], 0, end),
+      this.queue.getJobs(['paused'], 0, end),
     ]);
 
     // We sort by timestamp to try to give a somewhat consistent order
     const allJobs = [...waiting, ...active, ...completed, ...failed, ...delayed, ...paused];
-    return allJobs.sort((a, b) => b.timestamp - a.timestamp);
+    allJobs.sort((a, b) => b.timestamp - a.timestamp);
+
+    // Now apply the global pagination slice
+    // Note: The 'start' and 'end' arguments are 0-based indices.
+    // However, since we fetched 0..end from each, our local array has plenty of data.
+    // We just need to slice the correct window.
+    // But wait, if we fetched 0..end from each, we have up to (end+1)*6 items.
+    // The global 'start' index applies to this sorted list.
+    // BUT, if 'start' is large (e.g. page 10), fetching 0..end (e.g. 0..100) is fine.
+    // But if start > end (which shouldn't happen for a page), we need to be careful.
+    // Actually, 'end' passed to this function is (page * limit) - 1.
+    // So fetching 0..end covers everything up to the current page.
+
+    // We need to return the slice corresponding to the requested page.
+    // The caller (jobs.ts) calculates start/end based on page/limit.
+    // e.g. Page 2, limit 10: start=10, end=19.
+    // We fetched 0..19 from all queues.
+    // So we have the top 20 from each.
+    // We sort them. The global top 20 are definitely in this set.
+    // We take slice(start, end + 1).
+
+    // However, if the user requests start=10, end=19.
+    // We fetched 0..19.
+    // The slice should be relative to the global list.
+    // Since we only fetched 0..end, the global list IS effectively 0..end (plus extras).
+    // So slicing at 'start' is correct.
+
+    return allJobs.slice(start, end + 1);
   }
 
   // ===========================================================================

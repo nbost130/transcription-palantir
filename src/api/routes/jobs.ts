@@ -228,7 +228,7 @@ export async function jobRoutes(
       jobs = await transcriptionQueue.getJobs(status, start, end);
       // Map JobStatus to BullMQ job types
       const statusMap = {
-        [JobStatus.PENDING]: 'waiting',
+        [JobStatus.PENDING]: ['waiting', 'delayed'],
         [JobStatus.PROCESSING]: 'active',
         [JobStatus.COMPLETED]: 'completed',
         [JobStatus.FAILED]: 'failed',
@@ -237,7 +237,8 @@ export async function jobRoutes(
       } as const;
 
       const bullStatus = statusMap[status];
-      total = await transcriptionQueue.queueInstance.getJobCountByTypes(bullStatus);
+      // getJobCountByTypes accepts array of statuses
+      total = await transcriptionQueue.queueInstance.getJobCountByTypes(...(Array.isArray(bullStatus) ? bullStatus : [bullStatus]));
     } else {
       // Get all jobs (combined from all statuses)
       // Use getJobCounts() for accurate pagination total (Story 2.3 requirement)
