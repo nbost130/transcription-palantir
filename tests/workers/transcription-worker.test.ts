@@ -10,12 +10,14 @@ vi.mock('bullmq', () => ({
   Job: vi.fn(),
 }));
 vi.mock('ioredis', () => {
+  const RedisMock = vi.fn(function () {
+    return {
+      on: vi.fn(),
+    };
+  });
   return {
-    default: vi.fn(function () {
-      return {
-        on: vi.fn(),
-      };
-    }),
+    default: RedisMock,
+    Redis: RedisMock,
   };
 });
 vi.mock('../../src/services/whisper.js', () => ({
