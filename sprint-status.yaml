@@ -51,14 +51,14 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Reliable Job Processing
-  epic-2: in-progress
+  epic-2: done
   2-1-implement-filename-sanitization-on-ingestion: done
   2-2-implement-duplicate-file-prevention: done
   2-3-enhance-job-crud-endpoints: done
   2-4-implement-robust-retry-logic: done
   2-5-implement-error-code-and-reason-tracking: done
   2-6-implement-system-health-endpoint: done
-  2-7-implement-graceful-shutdown: backlog
+  2-7-implement-graceful-shutdown: done
   epic-2-retrospective: optional
 
   # Epic 3: Dashboard Data Accuracy
