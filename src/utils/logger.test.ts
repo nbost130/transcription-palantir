@@ -62,21 +62,15 @@ describe('Logger Utility', () => {
     });
 
     it('logJobComplete should execute without error', () => {
-      expect(() =>
-        logJobComplete({ jobId: '123', fileName: 'test.wav', duration: 100 })
-      ).not.toThrow();
+      expect(() => logJobComplete({ jobId: '123', fileName: 'test.wav', duration: 100 })).not.toThrow();
     });
 
     it('logJobError should execute without error', () => {
-      expect(() =>
-        logJobError({ jobId: '123', fileName: 'test.wav', error: new Error('Test error') })
-      ).not.toThrow();
+      expect(() => logJobError({ jobId: '123', fileName: 'test.wav', error: new Error('Test error') })).not.toThrow();
     });
 
     it('logApiRequest should execute without error', () => {
-      expect(() =>
-        logApiRequest({ requestId: 'req-1', method: 'GET', url: '/test', statusCode: 200 })
-      ).not.toThrow();
+      expect(() => logApiRequest({ requestId: 'req-1', method: 'GET', url: '/test', statusCode: 200 })).not.toThrow();
     });
 
     it('logWorkerStart should execute without error', () => {
@@ -92,9 +86,7 @@ describe('Logger Utility', () => {
     });
 
     it('logFileWatcherEvent should execute without error', () => {
-      expect(() =>
-        logFileWatcherEvent('add', { fileName: 'test.wav', filePath: '/path/to/test.wav' })
-      ).not.toThrow();
+      expect(() => logFileWatcherEvent('add', { fileName: 'test.wav', filePath: '/path/to/test.wav' })).not.toThrow();
     });
 
     it('logError should execute without error', () => {

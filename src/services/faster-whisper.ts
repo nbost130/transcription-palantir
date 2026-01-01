@@ -108,11 +108,7 @@ export class FasterWhisperService {
   /**
    * Build Python script arguments
    */
-  private buildPythonArgs(
-    inputFile: string,
-    outputFile: string,
-    options: FasterWhisperOptions
-  ): string[] {
+  private buildPythonArgs(inputFile: string, outputFile: string, options: FasterWhisperOptions): string[] {
     const args = [
       this.scriptPath,
       '--input',
@@ -168,10 +164,7 @@ export class FasterWhisperService {
       let isResolved = false;
 
       // Log start without timeout - file growth monitor will detect stuck processes
-      logger.info(
-        { inputPath },
-        'Starting transcription process - file growth monitor will detect if stuck'
-      );
+      logger.info({ inputPath }, 'Starting transcription process - file growth monitor will detect if stuck');
 
       child.stderr?.on('data', (data) => {
         stderr += data.toString();
@@ -252,14 +245,10 @@ export class FasterWhisperService {
 
       // Run a simple version check
       return new Promise((resolve, _reject) => {
-        const child = spawn(
-          this.pythonPath,
-          ['-c', 'import faster_whisper; print(faster_whisper.__version__)'],
-          {
-            stdio: ['ignore', 'pipe', 'pipe'],
-            timeout: 5000,
-          }
-        );
+        const child = spawn(this.pythonPath, ['-c', 'import faster_whisper; print(faster_whisper.__version__)'], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          timeout: 5000,
+        });
 
         let stdout = '';
         let stderr = '';

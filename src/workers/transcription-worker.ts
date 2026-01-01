@@ -12,12 +12,7 @@ import { appConfig, getRedisUrl } from '../config/index.js';
 import { fasterWhisperService } from '../services/faster-whisper.js';
 import { fileTracker } from '../services/file-tracker.js';
 import { whisperService } from '../services/whisper.js';
-import {
-  type ErrorCode,
-  ErrorCodes,
-  TranscriptionError,
-  type TranscriptionJob,
-} from '../types/index.js';
+import { type ErrorCode, ErrorCodes, TranscriptionError, type TranscriptionJob } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { fileManager } from './file-manager.js';
 
@@ -400,10 +395,7 @@ export class TranscriptionWorker {
         throw TranscriptionError.fromCode(ErrorCodes.WHISPER_NOT_FOUND, {
           originalError: errorMessage,
         });
-      } else if (
-        errorMessage.includes('Failed to read transcription output') ||
-        errorMessage.includes('empty')
-      ) {
+      } else if (errorMessage.includes('Failed to read transcription output') || errorMessage.includes('empty')) {
         throw TranscriptionError.fromCode(ErrorCodes.WHISPER_INVALID_OUTPUT, {
           originalError: errorMessage,
         });
@@ -473,9 +465,7 @@ To enable real transcription:
       processedJobs: this.processedJobs,
       failedJobs: this.failedJobs,
       successRate:
-        this.processedJobs > 0
-          ? ((this.processedJobs / (this.processedJobs + this.failedJobs)) * 100).toFixed(2)
-          : 0,
+        this.processedJobs > 0 ? ((this.processedJobs / (this.processedJobs + this.failedJobs)) * 100).toFixed(2) : 0,
     };
   }
 }

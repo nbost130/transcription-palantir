@@ -113,9 +113,7 @@ export function logJobError(context: LogContext & { error: Error }): void {
   );
 }
 
-export function logApiRequest(
-  context: LogContext & { method: string; url: string; statusCode: number }
-): void {
+export function logApiRequest(context: LogContext & { method: string; url: string; statusCode: number }): void {
   apiLogger.info(
     {
       requestId: context.requestId,

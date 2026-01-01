@@ -10,11 +10,7 @@ import { createHash } from 'node:crypto';
  * @param mtime Modification time of the file
  * @returns MD5 hash string to be used as Job ID
  */
-export function generateDeterministicJobId(
-  filePath: string,
-  fileSize: number,
-  mtime: Date
-): string {
+export function generateDeterministicJobId(filePath: string, fileSize: number, mtime: Date): string {
   // Create a unique hash based on file path, size, and modification time
   // If any of these change, it's considered a new version of the file
   const input = `${filePath}:${fileSize}:${mtime.getTime()}`;

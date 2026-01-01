@@ -359,15 +359,7 @@ export class TranscriptionQueue {
     ]);
 
     // Sort by timestamp to give a consistent order
-    const allJobs = [
-      ...waiting,
-      ...active,
-      ...completed,
-      ...failed,
-      ...delayed,
-      ...paused,
-      ...prioritized,
-    ];
+    const allJobs = [...waiting, ...active, ...completed, ...failed, ...delayed, ...paused, ...prioritized];
     allJobs.sort((a, b) => b.timestamp - a.timestamp);
 
     // Apply the global pagination slice
@@ -467,10 +459,7 @@ export class TranscriptionQueue {
     if (isActive) {
       // For active (processing) jobs, just update the data priority
       // We can't change the priority of a job that's already being processed
-      queueLogger.info(
-        { jobId, oldPriority, newPriority: priority },
-        'Job is active, updating data priority only'
-      );
+      queueLogger.info({ jobId, oldPriority, newPriority: priority }, 'Job is active, updating data priority only');
       await job.updateData({ ...job.data, priority });
       queueLogger.info({ jobId, priority }, 'Data priority updated for active job');
     } else {
@@ -493,10 +482,7 @@ export class TranscriptionQueue {
         priority,
         delay: 0, // Process immediately - BullMQ priority handles queue order
       });
-      queueLogger.info(
-        { oldJobId: jobId, newJobId: newJob.id, priority, delay: 0 },
-        'Job re-added with new priority'
-      );
+      queueLogger.info({ oldJobId: jobId, newJobId: newJob.id, priority, delay: 0 }, 'Job re-added with new priority');
 
       // Update the jobId for the return value
       jobId = newJob.id!;
