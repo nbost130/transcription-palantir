@@ -66,7 +66,7 @@ RUN apk add --no-cache \
 RUN git clone https://github.com/ggerganov/whisper.cpp.git /tmp/whisper.cpp \
     && cd /tmp/whisper.cpp \
     && make \
-    && cp whisper /usr/local/bin/whisper \
+    && cp build/bin/whisper-cli /usr/local/bin/whisper \
     && cp models/download-ggml-model.sh /usr/local/bin/ \
     && chmod +x /usr/local/bin/whisper /usr/local/bin/download-ggml-model.sh
 
