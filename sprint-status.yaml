@@ -69,11 +69,11 @@ development_status:
   epic-3-retrospective: optional
 
   # Epic 4: API Contracts & Integration
-  epic-4: backlog
-  4-1-expose-prometheus-metrics-endpoint: backlog
-  4-2-generate-openapi-specification: backlog
-  4-3-ensure-zod-openapi-schema-parity: backlog
-  4-4-implement-api-input-validation: backlog
-  4-5-document-api-versioning-policy: backlog
-  4-6-setup-consumer-repo-type-generation: backlog
+  epic-4: done
+  4-1-expose-prometheus-metrics-endpoint: done
+  4-2-generate-openapi-specification: done
+  4-3-ensure-zod-openapi-schema-parity: done
+  4-4-implement-api-input-validation: done
+  4-5-document-api-versioning-policy: done
+  4-6-setup-consumer-repo-type-generation: done
   epic-4-retrospective: optional
