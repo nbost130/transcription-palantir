@@ -8,8 +8,8 @@
 import { createHash } from 'node:crypto';
 import { stat } from 'node:fs/promises';
 import { Redis as IORedis, type Redis } from 'ioredis';
+import { appConfig, getRedisUrl } from '../config/index.js';
 import { logger } from '../utils/logger.js';
-import { getRedisUrl, appConfig } from '../config/index.js';
 
 // =============================================================================
 // CONSTANTS

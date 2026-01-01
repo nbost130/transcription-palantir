@@ -3,11 +3,11 @@ import { mockWorkerInstance } from '../../tests/mocks';
 
 // Mock dependencies
 const mockLogger = {
-  info: vi.fn(() => { }),
-  warn: vi.fn(() => { }),
-  error: vi.fn(() => { }),
-  debug: vi.fn(() => { }),
-  fatal: vi.fn(() => { }),
+  info: vi.fn(() => {}),
+  warn: vi.fn(() => {}),
+  error: vi.fn(() => {}),
+  debug: vi.fn(() => {}),
+  fatal: vi.fn(() => {}),
 };
 
 const mockConfig = {
@@ -39,14 +39,14 @@ const mockFasterWhisperService = {
 };
 
 const mockFileTracker = {
-  unmarkProcessed: vi.fn(async () => { }),
+  unmarkProcessed: vi.fn(async () => {}),
 };
 
 const mockFs = {
-  mkdir: vi.fn(async () => { }),
-  access: vi.fn(async () => { }),
-  rename: vi.fn(async () => { }),
-  writeFile: vi.fn(async () => { }),
+  mkdir: vi.fn(async () => {}),
+  access: vi.fn(async () => {}),
+  rename: vi.fn(async () => {}),
+  writeFile: vi.fn(async () => {}),
   stat: vi.fn(async () => ({})),
   readdir: vi.fn(async () => []),
 };
@@ -121,8 +121,8 @@ describe('TranscriptionWorker', () => {
           fileName: 'test.wav',
           filePath: '/test/watch/test.wav',
         },
-        updateProgress: vi.fn(async () => { }),
-        updateData: vi.fn(async () => { }),
+        updateProgress: vi.fn(async () => {}),
+        updateData: vi.fn(async () => {}),
       };
 
       // Access private method
@@ -142,8 +142,8 @@ describe('TranscriptionWorker', () => {
           fileName: 'test.wav',
           filePath: '/test/watch/test.wav',
         },
-        updateProgress: vi.fn(async () => { }),
-        updateData: vi.fn(async () => { }),
+        updateProgress: vi.fn(async () => {}),
+        updateData: vi.fn(async () => {}),
       };
 
       mockFasterWhisperService.transcribe.mockRejectedValueOnce(new Error('Transcription failed'));
@@ -165,8 +165,8 @@ describe('TranscriptionWorker', () => {
           fileName: 'test.wav',
           filePath: '/test/watch/test.wav',
         },
-        updateProgress: vi.fn(async () => { }),
-        updateData: vi.fn(async () => { }),
+        updateProgress: vi.fn(async () => {}),
+        updateData: vi.fn(async () => {}),
       };
 
       // Capture the progress callback passed to runTranscription (which calls transcribe)
@@ -188,8 +188,8 @@ describe('TranscriptionWorker', () => {
           fileName: 'missing.wav',
           filePath: '/test/watch/missing.wav',
         },
-        updateProgress: vi.fn(async () => { }),
-        updateData: vi.fn(async () => { }),
+        updateProgress: vi.fn(async () => {}),
+        updateData: vi.fn(async () => {}),
       };
 
       mockFs.access.mockRejectedValueOnce(new Error('File not found'));

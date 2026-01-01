@@ -6,10 +6,10 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { appConfig } from '../../config/index.js';
+import { transcriptionQueue } from '../../services/queue.js';
+import { ReconciliationService } from '../../services/reconciliation.js';
 import { whisperService } from '../../services/whisper.js';
 import { logger } from '../../utils/logger.js';
-import { ReconciliationService } from '../../services/reconciliation.js';
-import { transcriptionQueue } from '../../services/queue.js';
 
 // =============================================================================
 // SYSTEM ROUTES
@@ -298,7 +298,7 @@ export async function systemRoutes(fastify: FastifyInstance): Promise<void> {
   // ---------------------------------------------------------------------------
   // POST /system/reconcile - Trigger reconciliation
   // ---------------------------------------------------------------------------
-  fastify.post('/system/reconcile', async (request, reply) => {
+  fastify.post('/system/reconcile', async (_request, reply) => {
     logger.info('Manual reconciliation triggered via API');
 
     try {

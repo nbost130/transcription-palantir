@@ -267,7 +267,12 @@ export class TranscriptionQueue {
       completed: completed?.length ?? 0,
       failed: failed?.length ?? 0,
       delayed: delayed?.length ?? 0,
-      total: (waiting?.length ?? 0) + (active?.length ?? 0) + (completed?.length ?? 0) + (failed?.length ?? 0) + (delayed?.length ?? 0),
+      total:
+        (waiting?.length ?? 0) +
+        (active?.length ?? 0) +
+        (completed?.length ?? 0) +
+        (failed?.length ?? 0) +
+        (delayed?.length ?? 0),
     };
   }
 
@@ -276,14 +281,7 @@ export class TranscriptionQueue {
    * More efficient than fetching all jobs and counting
    */
   async getJobCounts() {
-    const counts = await this.queue.getJobCounts(
-      'waiting',
-      'active',
-      'completed',
-      'failed',
-      'delayed',
-      'paused'
-    );
+    const counts = await this.queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused');
 
     const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
 

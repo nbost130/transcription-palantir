@@ -12,13 +12,7 @@ import { appConfig, getRedisUrl } from '../config/index.js';
 import { fasterWhisperService } from '../services/faster-whisper.js';
 import { fileTracker } from '../services/file-tracker.js';
 import { whisperService } from '../services/whisper.js';
-import {
-  type ErrorCode,
-  ErrorCodes,
-  TranscriptionError,
-  type TranscriptionJob,
-  getErrorReason,
-} from '../types/index.js';
+import { type ErrorCode, ErrorCodes, TranscriptionError, type TranscriptionJob } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { fileManager } from './file-manager.js';
 
@@ -317,7 +311,7 @@ export class TranscriptionWorker {
       });
 
       // Move failed file
-      await fileManager.moveFailedFile(jobData.filePath).catch(() => { });
+      await fileManager.moveFailedFile(jobData.filePath).catch(() => {});
 
       // Re-throw to mark job as failed
       throw error;

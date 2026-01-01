@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock dependencies
 const mockLogger = {
-  info: vi.fn(() => { }),
-  warn: vi.fn(() => { }),
-  error: vi.fn(() => { }),
-  debug: vi.fn(() => { }),
-  fatal: vi.fn(() => { }),
+  info: vi.fn(() => {}),
+  warn: vi.fn(() => {}),
+  error: vi.fn(() => {}),
+  debug: vi.fn(() => {}),
+  fatal: vi.fn(() => {}),
 };
 
 const mockConfig = {
@@ -32,25 +32,25 @@ const mockConfig = {
 // Mock BullMQ
 const mockQueueInstance = {
   add: vi.fn(async () => ({ id: 'job-123', data: {} })),
-  on: vi.fn(() => { }),
-  close: vi.fn(async () => { }),
+  on: vi.fn(() => {}),
+  close: vi.fn(async () => {}),
   getJob: vi.fn(async () => null),
   getJobCounts: vi.fn(async () => ({ waiting: 0, active: 0, completed: 0, failed: 0 })),
-  pause: vi.fn(async () => { }),
-  resume: vi.fn(async () => { }),
+  pause: vi.fn(async () => {}),
+  resume: vi.fn(async () => {}),
   clean: vi.fn(async () => []),
-  waitUntilReady: vi.fn(async () => { }),
+  waitUntilReady: vi.fn(async () => {}),
 };
 
 const _mockWorkerInstance = {
-  on: vi.fn(() => { }),
-  close: vi.fn(async () => { }),
+  on: vi.fn(() => {}),
+  close: vi.fn(async () => {}),
 };
 
 const _mockQueueEventsInstance = {
-  on: vi.fn(() => { }),
-  close: vi.fn(async () => { }),
-  waitUntilReady: vi.fn(async () => { }),
+  on: vi.fn(() => {}),
+  close: vi.fn(async () => {}),
+  waitUntilReady: vi.fn(async () => {}),
 };
 
 vi.mock('../utils/logger.js', () => ({
@@ -60,8 +60,8 @@ vi.mock('../utils/logger.js', () => ({
   workerLogger: mockLogger,
   fileWatcherLogger: mockLogger,
   transcriptionLogger: mockLogger,
-  logQueueEvent: vi.fn(() => { }),
-  logFileWatcherEvent: vi.fn(() => { }),
+  logQueueEvent: vi.fn(() => {}),
+  logFileWatcherEvent: vi.fn(() => {}),
   logError: vi.fn((...args) => console.error('MOCK ERROR:', ...args)),
 }));
 
@@ -71,16 +71,16 @@ vi.mock('../config/index.js', () => ({
 }));
 
 const mockFileTracker = {
-  connect: vi.fn(async () => { }),
+  connect: vi.fn(async () => {}),
   isProcessed: vi.fn(async () => false),
-  markProcessed: vi.fn(async () => { }),
+  markProcessed: vi.fn(async () => {}),
 };
 
 const mockChokidarWatcher = {
   on: vi.fn(function (this: any) {
     return this;
   }),
-  close: vi.fn(async () => { }),
+  close: vi.fn(async () => {}),
 };
 
 const mockChokidar = {
@@ -96,12 +96,12 @@ const mockFs = {
     birthtime: new Date(),
     mtime: new Date(),
   })),
-  access: vi.fn(async () => { }),
+  access: vi.fn(async () => {}),
   readdir: vi.fn(async () => []),
-  rename: vi.fn(async () => { }),
-  writeFile: vi.fn(async () => { }),
-  readFile: vi.fn(async () => { }),
-  mkdir: vi.fn(async () => { }),
+  rename: vi.fn(async () => {}),
+  writeFile: vi.fn(async () => {}),
+  readFile: vi.fn(async () => {}),
+  mkdir: vi.fn(async () => {}),
 };
 
 vi.mock('./file-tracker.js', () => ({ fileTracker: mockFileTracker }));

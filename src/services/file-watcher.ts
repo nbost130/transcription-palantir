@@ -4,7 +4,6 @@
  * Monitors directories for new audio files and automatically creates transcription jobs
  */
 
-import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { access, readdir, stat } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
@@ -140,7 +139,7 @@ export class FileWatcherService {
       // 1. Sanitize filename first
       const sanitizedPath = await this.sanitizeFile(filePath);
 
-      // If file was renamed, we stop here. 
+      // If file was renamed, we stop here.
       // The watcher will detect the "new" file (renamed version) and process it then.
       if (sanitizedPath !== filePath) {
         logger.info({ original: filePath, sanitized: sanitizedPath }, 'File renamed for sanitization');
@@ -204,16 +203,16 @@ export class FileWatcherService {
 
     // Replace spaces with underscores, remove unsafe chars
     const safeName = name
-      .replace(/\s+/g, '_')           // Spaces to underscores
-      .replace(/[^a-zA-Z0-9\-_\.]/g, '') // Remove non-alphanumeric (except -, _, and .)
-      .replace(/_+/g, '_');           // Dedupe underscores
+      .replace(/\s+/g, '_') // Spaces to underscores
+      .replace(/[^a-zA-Z0-9\-_.]/g, '') // Remove non-alphanumeric (except -, _, and .)
+      .replace(/_+/g, '_'); // Dedupe underscores
 
     const newFileName = `${safeName}${ext}`;
     const newFilePath = join(dir, newFileName);
 
     if (newFilePath !== filePath) {
       try {
-        await import('fs/promises').then(fs => fs.rename(filePath, newFilePath));
+        await import('node:fs/promises').then((fs) => fs.rename(filePath, newFilePath));
         return newFilePath;
       } catch (error) {
         logger.error({ error, filePath, newFilePath }, 'Failed to rename file for sanitization');
@@ -340,7 +339,7 @@ export class FileWatcherService {
         const job = await transcriptionQueue.addJob(jobData);
 
         // Check if we got back an existing job (duplicate)
-        // Note: BullMQ returns the job instance. If it was a duplicate, 
+        // Note: BullMQ returns the job instance. If it was a duplicate,
         // the timestamp might be older.
         // However, standard BullMQ behavior with jobId is to return the existing job.
 
@@ -375,7 +374,7 @@ export class FileWatcherService {
   }
 
   private generateJobId(filePath: string, metadata: FileMetadata): string {
-    const { createHash } = require('crypto');
+    const { createHash } = require('node:crypto');
     // Create a unique hash based on file path, size, and modification time
     // If any of these change, it's considered a new version of the file
     const input = `${filePath}:${metadata.fileSize}:${metadata.modifiedAt.getTime()}`;

@@ -392,8 +392,7 @@ function processProjectJob(job: any, projectMap: Map<string, any>) {
   const projectName = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'Root';
 
   const project = getProjectFromMap(projectName, projectMap);
-  const jobStatus =
-    job.data.status || (job.finishedOn ? 'completed' : job.processedOn ? 'processing' : 'pending');
+  const jobStatus = job.data.status || (job.finishedOn ? 'completed' : job.processedOn ? 'processing' : 'pending');
 
   updateProjectStats(project, job, jobStatus);
 }
@@ -549,7 +548,7 @@ export async function retryJob(request: FastifyRequest<{ Params: { jobId: string
   if (job.data.filePath) {
     try {
       await fs.access(job.data.filePath);
-    } catch (error) {
+    } catch (_error) {
       // Try to recover from failed directory using atomicMove (Story 2.4)
       try {
         const relativePath = relative(appConfig.processing.watchDirectory, job.data.filePath);
@@ -563,7 +562,7 @@ export async function retryJob(request: FastifyRequest<{ Params: { jobId: string
           { jobId, from: failedPath, to: job.data.filePath },
           'Restored file from failed directory for retry'
         );
-      } catch (recoveryError) {
+      } catch (_recoveryError) {
         return reply.code(400).send({
           success: false,
           error: `Input file not accessible: ${job.data.filePath}`,

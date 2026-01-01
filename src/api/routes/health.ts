@@ -142,29 +142,31 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
   // Detailed System Health
   // ---------------------------------------------------------------------------
 
-  fastify.get('/health/detailed', {
-    schema: {
-      description: 'Detailed system health with metrics (Story 2.6)',
-      tags: ['health'],
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            status: { type: 'string' },
-            timestamp: { type: 'string' },
-            uptime: { type: 'number' },
-            version: { type: 'string' },
-            whisperBinaryStatus: { type: 'string' },
-            whisperVersion: { type: ['string', 'null'] },
-            redisStatus: { type: 'string' },
-            queueStats: { type: 'object' },
-            services: { type: 'array' },
-            metrics: { type: 'object' },
+  fastify.get(
+    '/health/detailed',
+    {
+      schema: {
+        description: 'Detailed system health with metrics (Story 2.6)',
+        tags: ['health'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              status: { type: 'string' },
+              timestamp: { type: 'string' },
+              uptime: { type: 'number' },
+              version: { type: 'string' },
+              whisperBinaryStatus: { type: 'string' },
+              whisperVersion: { type: ['string', 'null'] },
+              redisStatus: { type: 'string' },
+              queueStats: { type: 'object' },
+              services: { type: 'array' },
+              metrics: { type: 'object' },
+            },
           },
         },
       },
     },
-  },
     async (_request, _reply) => {
       const services: ServiceHealth[] = [];
 

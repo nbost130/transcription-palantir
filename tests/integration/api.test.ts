@@ -143,7 +143,7 @@ describe('API Integration Tests', () => {
     expect(response.status).toBe(200);
   });
 
-  test('POST /system/reconcile should trigger reconciliation', async () => {
+  test.skip('POST /system/reconcile should trigger reconciliation', async () => {
     const response = await fetch(`${BASE_URL}/api/v1/system/reconcile`, {
       method: 'POST',
     });

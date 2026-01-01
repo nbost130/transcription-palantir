@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock dependencies
 const mockLogger = {
-  info: vi.fn(() => { }),
-  warn: vi.fn(() => { }),
-  error: vi.fn(() => { }),
-  debug: vi.fn(() => { }),
-  fatal: vi.fn(() => { }),
+  info: vi.fn(() => {}),
+  warn: vi.fn(() => {}),
+  error: vi.fn(() => {}),
+  debug: vi.fn(() => {}),
+  fatal: vi.fn(() => {}),
 };
 
 const mockConfig = {
@@ -21,13 +21,13 @@ const mockConfig = {
 };
 
 const mockFastifyInstance = {
-  register: vi.fn(() => { }),
-  addHook: vi.fn(() => { }),
-  get: vi.fn(() => { }),
-  setErrorHandler: vi.fn(() => { }),
-  listen: vi.fn(async () => { }),
-  close: vi.fn(async () => { }),
-  ready: vi.fn(async () => { }),
+  register: vi.fn(() => {}),
+  addHook: vi.fn(() => {}),
+  get: vi.fn(() => {}),
+  setErrorHandler: vi.fn(() => {}),
+  listen: vi.fn(async () => {}),
+  close: vi.fn(async () => {}),
+  ready: vi.fn(async () => {}),
 };
 
 // Mock Fastify factory
@@ -36,7 +36,7 @@ const mockFastify = vi.fn(() => {
 });
 
 // Mock routes
-const mockRoutes = async () => { };
+const mockRoutes = async () => {};
 
 // Mock modules
 vi.mock('../utils/logger.js', () => ({ logger: mockLogger }));
@@ -55,15 +55,15 @@ vi.mock('./routes/monitor.js', () => ({ monitorRoutes: mockRoutes }));
 vi.mock('./routes/websocket.js', () => ({ websocketRoutes: mockRoutes }));
 vi.mock('./routes/services.js', () => ({ default: mockRoutes }));
 vi.mock('./routes/system.js', () => ({ systemRoutes: mockRoutes }));
-vi.mock('./middleware/error.js', () => ({ errorHandler: () => { } }));
-vi.mock('./middleware/logger.js', () => ({ requestLogger: () => { } }));
+vi.mock('./middleware/error.js', () => ({ errorHandler: () => {} }));
+vi.mock('./middleware/logger.js', () => ({ requestLogger: () => {} }));
 vi.mock('bullmq', () => ({
-  Queue: class { },
-  Worker: class { },
-  QueueEvents: class { },
-  Job: class { },
+  Queue: class {},
+  Worker: class {},
+  QueueEvents: class {},
+  Job: class {},
 }));
-vi.mock('ioredis', () => ({ Redis: class { } }));
+vi.mock('ioredis', () => ({ Redis: class {} }));
 
 describe('ApiServer', () => {
   let ApiServer: any;

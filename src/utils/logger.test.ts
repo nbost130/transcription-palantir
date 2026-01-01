@@ -15,10 +15,10 @@ import {
 } from './logger';
 
 // Mock pino
-const mockInfo = vi.fn(() => { });
-const mockError = vi.fn(() => { });
-const mockDebug = vi.fn(() => { });
-const mockFatal = vi.fn(() => { });
+const mockInfo = vi.fn(() => {});
+const mockError = vi.fn(() => {});
+const mockDebug = vi.fn(() => {});
+const mockFatal = vi.fn(() => {});
 const _mockChild = vi.fn(() => ({
   info: mockInfo,
   error: mockError,

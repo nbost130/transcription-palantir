@@ -226,7 +226,7 @@ export class FasterWhisperService {
     try {
       await access(this.pythonPath, constants.X_OK);
       return { available: true, path: this.pythonPath };
-    } catch (error) {
+    } catch (_error) {
       logger.warn({ pythonPath: this.pythonPath }, 'Whisper Python binary not accessible');
       return { available: false, path: this.pythonPath };
     }
@@ -244,7 +244,7 @@ export class FasterWhisperService {
       }
 
       // Run a simple version check
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve, _reject) => {
         const child = spawn(this.pythonPath, ['-c', 'import faster_whisper; print(faster_whisper.__version__)'], {
           stdio: ['ignore', 'pipe', 'pipe'],
           timeout: 5000,
