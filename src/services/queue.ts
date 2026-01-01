@@ -216,7 +216,7 @@ export class TranscriptionQueue {
     const job = await this.queue.add('transcribe', jobData, {
       priority: jobData.priority || JobPriority.NORMAL,
       ...(jobData.id && { jobId: jobData.id }),
-      delay: this.calculateDelay(jobData.priority),
+      delay: 0, // Process immediately - BullMQ priority handles queue order
     });
 
     logQueueEvent('job_added', {
@@ -253,12 +253,13 @@ export class TranscriptionQueue {
   // ===========================================================================
 
   async getQueueStats() {
-    const [waiting, active, completed, failed, delayed] = await Promise.all([
+    const [waiting, active, completed, failed, delayed, prioritized] = await Promise.all([
       this.queue.getWaiting(),
       this.queue.getActive(),
       this.queue.getCompleted(),
       this.queue.getFailed(),
       this.queue.getDelayed(),
+      this.queue.getPrioritized(), // BullMQ 5: prioritized jobs stored separately
     ]);
 
     return {
@@ -267,12 +268,14 @@ export class TranscriptionQueue {
       completed: completed?.length ?? 0,
       failed: failed?.length ?? 0,
       delayed: delayed?.length ?? 0,
+      prioritized: prioritized?.length ?? 0,
       total:
         (waiting?.length ?? 0) +
         (active?.length ?? 0) +
         (completed?.length ?? 0) +
         (failed?.length ?? 0) +
-        (delayed?.length ?? 0),
+        (delayed?.length ?? 0) +
+        (prioritized?.length ?? 0),
     };
   }
 
@@ -281,7 +284,15 @@ export class TranscriptionQueue {
    * More efficient than fetching all jobs and counting
    */
   async getJobCounts() {
-    const counts = await this.queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused');
+    const counts = await this.queue.getJobCounts(
+      'waiting',
+      'active',
+      'completed',
+      'failed',
+      'delayed',
+      'paused',
+      'prioritized' // BullMQ 5: prioritized jobs stored separately
+    );
 
     const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
 
@@ -292,24 +303,26 @@ export class TranscriptionQueue {
       failed: counts.failed || 0,
       delayed: counts.delayed || 0,
       paused: counts.paused || 0,
+      prioritized: counts.prioritized || 0,
       total,
     };
   }
 
   async getJobs(status: JobStatus, start = 0, end = 19) {
     if (status === JobStatus.PENDING) {
-      // For pending jobs, we need to combine delayed and waiting queues
-      // but respect the pagination limits
+      // For pending jobs, we need to combine delayed, waiting, and prioritized queues
+      // BullMQ 5 stores prioritized jobs separately
       const _limit = end - start + 1;
 
-      // Get jobs from both queues with generous limits
-      const [delayedJobs, waitingJobs] = await Promise.all([
+      // Get jobs from all pending queues with generous limits
+      const [delayedJobs, waitingJobs, prioritizedJobs] = await Promise.all([
         this.queue.getJobs(['delayed'], 0, Math.max(end * 2, 100)),
         this.queue.getJobs(['waiting'], 0, Math.max(end * 2, 100)),
+        this.queue.getJobs(['prioritized'], 0, Math.max(end * 2, 100)),
       ]);
 
       // Combine and sort by timestamp (newer first)
-      const combined = [...delayedJobs, ...waitingJobs].sort((a, b) => {
+      const combined = [...delayedJobs, ...waitingJobs, ...prioritizedJobs].sort((a, b) => {
         const aTime = a.timestamp || 0;
         const bTime = b.timestamp || 0;
         return bTime - aTime;
@@ -332,49 +345,24 @@ export class TranscriptionQueue {
   }
 
   async getAllJobs(start = 0, end = 100) {
-    // Get jobs from all statuses
+    // Get jobs from all statuses including prioritized (BullMQ 5)
     // To ensure accurate global pagination by timestamp, we must fetch the top 'end' jobs
     // from EACH status, combine them, sort, and then take the requested slice.
-    // Fetching from 'start' to 'end' per status is incorrect because the Nth job globally
-    // might be the 1st job in a specific queue.
-    const [waiting, active, completed, failed, delayed, paused] = await Promise.all([
+    const [waiting, active, completed, failed, delayed, paused, prioritized] = await Promise.all([
       this.queue.getJobs(['waiting'], 0, end),
       this.queue.getJobs(['active'], 0, end),
       this.queue.getJobs(['completed'], 0, end),
       this.queue.getJobs(['failed'], 0, end),
       this.queue.getJobs(['delayed'], 0, end),
       this.queue.getJobs(['paused'], 0, end),
+      this.queue.getJobs(['prioritized'], 0, end), // BullMQ 5: prioritized jobs
     ]);
 
-    // We sort by timestamp to try to give a somewhat consistent order
-    const allJobs = [...waiting, ...active, ...completed, ...failed, ...delayed, ...paused];
+    // Sort by timestamp to give a consistent order
+    const allJobs = [...waiting, ...active, ...completed, ...failed, ...delayed, ...paused, ...prioritized];
     allJobs.sort((a, b) => b.timestamp - a.timestamp);
 
-    // Now apply the global pagination slice
-    // Note: The 'start' and 'end' arguments are 0-based indices.
-    // However, since we fetched 0..end from each, our local array has plenty of data.
-    // We just need to slice the correct window.
-    // But wait, if we fetched 0..end from each, we have up to (end+1)*6 items.
-    // The global 'start' index applies to this sorted list.
-    // BUT, if 'start' is large (e.g. page 10), fetching 0..end (e.g. 0..100) is fine.
-    // But if start > end (which shouldn't happen for a page), we need to be careful.
-    // Actually, 'end' passed to this function is (page * limit) - 1.
-    // So fetching 0..end covers everything up to the current page.
-
-    // We need to return the slice corresponding to the requested page.
-    // The caller (jobs.ts) calculates start/end based on page/limit.
-    // e.g. Page 2, limit 10: start=10, end=19.
-    // We fetched 0..19 from all queues.
-    // So we have the top 20 from each.
-    // We sort them. The global top 20 are definitely in this set.
-    // We take slice(start, end + 1).
-
-    // However, if the user requests start=10, end=19.
-    // We fetched 0..19.
-    // The slice should be relative to the global list.
-    // Since we only fetched 0..end, the global list IS effectively 0..end (plus extras).
-    // So slicing at 'start' is correct.
-
+    // Apply the global pagination slice
     return allJobs.slice(start, end + 1);
   }
 
@@ -402,21 +390,8 @@ export class TranscriptionQueue {
   // PRIVATE METHODS
   // ===========================================================================
 
-  private calculateDelay(priority?: JobPriority): number {
-    // Add small delays for lower priority jobs to allow urgent jobs to jump ahead
-    switch (priority) {
-      case JobPriority.URGENT:
-        return 0;
-      case JobPriority.HIGH:
-        return 1000; // 1 second
-      case JobPriority.NORMAL:
-        return 5000; // 5 seconds
-      case JobPriority.LOW:
-        return 10000; // 10 seconds
-      default:
-        return 5000;
-    }
-  }
+  // Removed: calculateDelay() - artificial delays are unnecessary
+  // BullMQ's native priority system handles job ordering without delays
 
   private setupEventListeners(): void {
     this.queueEvents.on('completed', ({ jobId }) => {
@@ -490,11 +465,10 @@ export class TranscriptionQueue {
     } else {
       // For ALL pending jobs (waiting, delayed, paused), use remove + re-add
       // BullMQ's changePriority() has issues with jobs that have been retried
-      const newDelay = this.calculateDelay(priority);
       const jobData = { ...job.data, priority };
 
       queueLogger.info(
-        { jobId, oldPriority, newPriority: priority, delay: newDelay },
+        { jobId, oldPriority, newPriority: priority, delay: 0 },
         'Updating pending job priority (remove + re-add)'
       );
 
@@ -502,16 +476,13 @@ export class TranscriptionQueue {
       await job.remove();
       queueLogger.info({ jobId }, 'Job removed');
 
-      // Add the job back with new priority and delay
+      // Add the job back with new priority - no artificial delay
       // BullMQ will generate a new job ID
       const newJob = await this.queue.add(job.name, jobData, {
         priority,
-        delay: newDelay,
+        delay: 0, // Process immediately - BullMQ priority handles queue order
       });
-      queueLogger.info(
-        { oldJobId: jobId, newJobId: newJob.id, priority, delay: newDelay },
-        'Job re-added with new priority'
-      );
+      queueLogger.info({ oldJobId: jobId, newJobId: newJob.id, priority, delay: 0 }, 'Job re-added with new priority');
 
       // Update the jobId for the return value
       jobId = newJob.id!;
