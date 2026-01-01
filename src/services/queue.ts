@@ -482,10 +482,7 @@ export class TranscriptionQueue {
         priority,
         delay: 0, // Process immediately - BullMQ priority handles queue order
       });
-      queueLogger.info(
-        { oldJobId: jobId, newJobId: newJob.id, priority, delay: 0 },
-        'Job re-added with new priority'
-      );
+      queueLogger.info({ oldJobId: jobId, newJobId: newJob.id, priority, delay: 0 }, 'Job re-added with new priority');
 
       // Update the jobId for the return value
       jobId = newJob.id!;

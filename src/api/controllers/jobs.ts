@@ -44,7 +44,13 @@ async function computeHealthStatus(job: Job): Promise<HealthStatus> {
   }
 
   // Normal healthy state (including prioritized in BullMQ 5)
-  if (state === 'completed' || state === 'active' || state === 'waiting' || state === 'delayed' || state === 'prioritized') {
+  if (
+    state === 'completed' ||
+    state === 'active' ||
+    state === 'waiting' ||
+    state === 'delayed' ||
+    state === 'prioritized'
+  ) {
     return HealthStatus.Healthy;
   }
 
