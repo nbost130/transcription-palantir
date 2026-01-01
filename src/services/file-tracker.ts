@@ -53,7 +53,11 @@ export class FileTrackerService {
     try {
       // Redis connection is already established by queue service
       // Just verify it's ready
-      if (this.redis.status === 'ready' || this.redis.status === 'connect' || this.redis.status === 'connecting') {
+      if (
+        this.redis.status === 'ready' ||
+        this.redis.status === 'connect' ||
+        this.redis.status === 'connecting'
+      ) {
         this.isConnected = true;
         logger.info('📝 File tracker using shared Redis connection');
       } else {

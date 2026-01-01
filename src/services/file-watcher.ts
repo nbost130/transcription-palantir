@@ -142,7 +142,10 @@ export class FileWatcherService {
       // If file was renamed, we stop here.
       // The watcher will detect the "new" file (renamed version) and process it then.
       if (sanitizedPath !== filePath) {
-        logger.info({ original: filePath, sanitized: sanitizedPath }, 'File renamed for sanitization');
+        logger.info(
+          { original: filePath, sanitized: sanitizedPath },
+          'File renamed for sanitization'
+        );
         return;
       }
 
@@ -154,7 +157,10 @@ export class FileWatcherService {
       // Check persistent storage for duplicate detection across restarts
       const alreadyProcessed = await fileTracker.isProcessed(filePath);
       if (alreadyProcessed) {
-        logger.debug({ filePath }, 'File already processed (found in persistent storage), skipping');
+        logger.debug(
+          { filePath },
+          'File already processed (found in persistent storage), skipping'
+        );
         this.processedFiles.add(filePath); // Add to in-memory cache
         return;
       }
@@ -391,7 +397,10 @@ export class FileWatcherService {
       const foundFiles = await this.scanDirectoryRecursively(appConfig.processing.watchDirectory);
 
       if (foundFiles.length > 0) {
-        logger.info({ count: foundFiles.length }, `Found ${foundFiles.length} existing audio files to process`);
+        logger.info(
+          { count: foundFiles.length },
+          `Found ${foundFiles.length} existing audio files to process`
+        );
 
         // Process each found file
         for (const filePath of foundFiles) {
@@ -429,7 +438,11 @@ export class FileWatcherService {
           }
 
           // Recursively scan subdirectory
-          const subFiles = await this.scanDirectoryRecursively(fullPath, maxDepth, currentDepth + 1);
+          const subFiles = await this.scanDirectoryRecursively(
+            fullPath,
+            maxDepth,
+            currentDepth + 1
+          );
           foundFiles.push(...subFiles);
         } else if (entry.isFile()) {
           // Check if it's a supported audio file

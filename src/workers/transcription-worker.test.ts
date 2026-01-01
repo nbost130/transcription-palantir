@@ -60,7 +60,9 @@ vi.mock('../config/index.js', () => ({
 }));
 
 vi.mock('../services/whisper.js', () => ({ whisperService: mockWhisperService }));
-vi.mock('../services/faster-whisper.js', () => ({ fasterWhisperService: mockFasterWhisperService }));
+vi.mock('../services/faster-whisper.js', () => ({
+  fasterWhisperService: mockFasterWhisperService,
+}));
 vi.mock('../services/file-tracker.js', () => ({ fileTracker: mockFileTracker }));
 vi.mock('fs/promises', () => ({ ...mockFs, default: mockFs }));
 vi.mock('node:fs/promises', () => ({

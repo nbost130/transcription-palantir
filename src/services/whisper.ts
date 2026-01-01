@@ -198,7 +198,12 @@ export class WhisperService {
   /**
    * Build Whisper.cpp command arguments
    */
-  private buildWhisperArgs(inputFile: string, outputDir: string, baseName: string, options: WhisperOptions): string[] {
+  private buildWhisperArgs(
+    inputFile: string,
+    outputDir: string,
+    baseName: string,
+    options: WhisperOptions
+  ): string[] {
     const model = options.model || appConfig.whisper.model;
     const modelPath = model.includes('/')
       ? model // Full path provided
@@ -234,7 +239,12 @@ export class WhisperService {
     }
   }
 
-  private addFormatArgs(args: string[], outputDir: string, baseName: string, options: WhisperOptions) {
+  private addFormatArgs(
+    args: string[],
+    outputDir: string,
+    baseName: string,
+    options: WhisperOptions
+  ) {
     const outputFormat = options.outputFormat || 'txt';
 
     // Output format (use proper flags like --output-txt)
@@ -305,7 +315,10 @@ export class WhisperService {
   /**
    * Run Whisper.cpp binary and capture output
    */
-  private async runWhisper(args: string[], onProgress?: (progress: WhisperProgress) => void): Promise<void> {
+  private async runWhisper(
+    args: string[],
+    onProgress?: (progress: WhisperProgress) => void
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
       const child = spawn(this.binaryPath, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -364,7 +377,10 @@ export class WhisperService {
   /**
    * Parse transcription output file
    */
-  private async parseTranscriptionOutput(outputFile: string, format: string): Promise<TranscriptionResult> {
+  private async parseTranscriptionOutput(
+    outputFile: string,
+    format: string
+  ): Promise<TranscriptionResult> {
     try {
       const content = await readFile(outputFile, 'utf-8');
 
