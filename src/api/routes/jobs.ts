@@ -52,7 +52,7 @@ async function computeHealthStatus(job: Job): Promise<HealthStatus> {
   }
 
   // Normal healthy state
-  if (state === 'completed' || state === 'active' || state === 'waiting') {
+  if (state === 'completed' || state === 'active' || state === 'waiting' || state === 'delayed') {
     return HealthStatus.Healthy;
   }
 
@@ -199,7 +199,15 @@ export async function jobRoutes(
           properties: {
             success: { type: 'boolean' },
             data: { type: 'array' },
-            pagination: { type: 'object' },
+            pagination: {
+              type: 'object',
+              properties: {
+                page: { type: 'number' },
+                limit: { type: 'number' },
+                total: { type: 'number' },
+                totalPages: { type: 'number' },
+              },
+            },
             timestamp: { type: 'string' },
             requestId: { type: 'string' },
           },
@@ -220,7 +228,7 @@ export async function jobRoutes(
       jobs = await transcriptionQueue.getJobs(status, start, end);
       // Map JobStatus to BullMQ job types
       const statusMap = {
-        [JobStatus.PENDING]: 'waiting',
+        [JobStatus.PENDING]: ['waiting', 'delayed'],
         [JobStatus.PROCESSING]: 'active',
         [JobStatus.COMPLETED]: 'completed',
         [JobStatus.FAILED]: 'failed',
@@ -229,7 +237,8 @@ export async function jobRoutes(
       } as const;
 
       const bullStatus = statusMap[status];
-      total = await transcriptionQueue.queueInstance.getJobCountByTypes(bullStatus);
+      // getJobCountByTypes accepts array of statuses
+      total = await transcriptionQueue.queueInstance.getJobCountByTypes(...(Array.isArray(bullStatus) ? bullStatus : [bullStatus]));
     } else {
       // Get all jobs (combined from all statuses)
       // Use getJobCounts() for accurate pagination total (Story 2.3 requirement)
@@ -245,6 +254,7 @@ export async function jobRoutes(
       success: true,
       data: await Promise.all(jobs.map(async job => {
         const state = await job.getState();
+        const healthStatus = await computeHealthStatus(job);
         let jobStatus = 'pending';
 
         if (state === 'completed') {
@@ -267,6 +277,7 @@ export async function jobRoutes(
           attempts: job.attemptsMade,
           error: job.failedReason || null,
           fileSize: job.data.fileSize || null,
+          healthStatus,
         };
       })),
       pagination: {
