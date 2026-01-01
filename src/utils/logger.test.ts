@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it, vi } from 'vitest';
 import {
   createTimer,
   logApiRequest,
@@ -15,11 +15,11 @@ import {
 } from './logger';
 
 // Mock pino
-const mockInfo = mock(() => {});
-const mockError = mock(() => {});
-const mockDebug = mock(() => {});
-const mockFatal = mock(() => {});
-const _mockChild = mock(() => ({
+const mockInfo = vi.fn(() => { });
+const mockError = vi.fn(() => { });
+const mockDebug = vi.fn(() => { });
+const mockFatal = vi.fn(() => { });
+const _mockChild = vi.fn(() => ({
   info: mockInfo,
   error: mockError,
   debug: mockDebug,

@@ -1,40 +1,40 @@
-import { mock } from 'bun:test';
+import { vi } from 'vitest';
 
 export const mockQueueInstance = {
-    add: mock(async (name, data) => ({ id: 'job-123', name, data })),
-    on: mock(() => { }),
-    close: mock(async () => { }),
-    getJob: mock(async () => null),
-    getJobCounts: mock(async () => ({ waiting: 0, active: 0, completed: 0, failed: 0 })),
-    getWaiting: mock(async () => []),
-    getActive: mock(async () => []),
-    getCompleted: mock(async () => []),
-    getFailed: mock(async () => []),
-    getDelayed: mock(async () => []),
-    pause: mock(async () => { }),
-    resume: mock(async () => { }),
-    clean: mock(async () => []),
-    waitUntilReady: mock(async () => { }),
-    getJobs: mock(async () => []),
-    getJobCountByTypes: mock(async () => 0),
+    add: vi.fn(async (name, data) => ({ id: 'job-123', name, data })),
+    on: vi.fn(() => { }),
+    close: vi.fn(async () => { }),
+    getJob: vi.fn(async () => null),
+    getJobCounts: vi.fn(async () => ({ waiting: 0, active: 0, completed: 0, failed: 0 })),
+    getWaiting: vi.fn(async () => []),
+    getActive: vi.fn(async () => []),
+    getCompleted: vi.fn(async () => []),
+    getFailed: vi.fn(async () => []),
+    getDelayed: vi.fn(async () => []),
+    pause: vi.fn(async () => { }),
+    resume: vi.fn(async () => { }),
+    clean: vi.fn(async () => []),
+    waitUntilReady: vi.fn(async () => { }),
+    getJobs: vi.fn(async () => []),
+    getJobCountByTypes: vi.fn(async () => 0),
 };
 
 export const mockWorkerInstance = {
-    on: mock(() => { }),
-    close: mock(async () => { }),
+    on: vi.fn(() => { }),
+    close: vi.fn(async () => { }),
 };
 
 export const mockQueueEventsInstance = {
-    on: mock(() => { }),
-    close: mock(async () => { }),
-    waitUntilReady: mock(async () => { }),
+    on: vi.fn(() => { }),
+    close: vi.fn(async () => { }),
+    waitUntilReady: vi.fn(async () => { }),
 };
 
 export const mockRedis = {
-    on: mock(() => { }),
-    quit: mock(async () => { }),
+    on: vi.fn(() => { }),
+    quit: vi.fn(async () => { }),
     status: 'ready',
-    connect: mock(async () => { }),
-    disconnect: mock(async () => { }),
-    duplicate: mock(() => mockRedis),
+    connect: vi.fn(async () => { }),
+    disconnect: vi.fn(async () => { }),
+    duplicate: vi.fn(() => mockRedis),
 };

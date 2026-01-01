@@ -7,8 +7,10 @@
 import { apiServer } from './api/server.js';
 import { appConfig } from './config/index.js';
 import { fileTracker } from './services/file-tracker.js';
+
 import { fileWatcher } from './services/file-watcher.js';
 import { transcriptionQueue } from './services/queue.js';
+import { ReconciliationService } from './services/reconciliation.js';
 import { logFatalError, logger } from './utils/logger.js';
 import { transcriptionWorker } from './workers/transcription-worker.js';
 
@@ -92,6 +94,11 @@ class TranscriptionPalantir {
     // Initialize queue service
     await transcriptionQueue.initialize();
     logger.info('✅ Queue service initialized');
+
+    // Run boot reconciliation (Self-Healing)
+    // Must run BEFORE file watcher starts to ensure consistent state
+    const reconciliationService = new ReconciliationService(transcriptionQueue, appConfig);
+    await reconciliationService.reconcileOnBoot();
 
     // TODO: Initialize other services
     // - File watcher service

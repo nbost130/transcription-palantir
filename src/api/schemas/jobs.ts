@@ -53,7 +53,15 @@ export const getAllJobsSchema = {
       properties: {
         success: { type: 'boolean' },
         data: { type: 'array' },
-        pagination: { type: 'object' },
+        pagination: {
+          type: 'object',
+          properties: {
+            page: { type: 'number' },
+            limit: { type: 'number' },
+            total: { type: 'number' },
+            totalPages: { type: 'number' },
+          },
+        },
         timestamp: { type: 'string' },
         requestId: { type: 'string' },
       },

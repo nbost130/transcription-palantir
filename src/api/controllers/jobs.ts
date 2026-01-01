@@ -1,10 +1,14 @@
 import { randomUUID } from 'node:crypto';
+import { promises as fs } from 'node:fs';
 import { stat } from 'node:fs/promises';
-import { basename, extname } from 'node:path';
+import { basename, extname, join, relative } from 'node:path';
+import type { Job } from 'bullmq';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { appConfig } from '../../config/index.js';
 import { transcriptionQueue } from '../../services/queue.js';
 import {
   type ApiResponse,
+  HealthStatus,
   JobCreateSchema,
   JobPriority,
   JobStatus,
@@ -14,6 +18,39 @@ import {
   type TranscriptionJob,
 } from '../../types/index.js';
 import { getMimeType } from '../../utils/file.js';
+import { atomicMove } from '../../utils/file-operations.js';
+
+// ... (createJob remains the same)
+
+/**
+ * Compute health status dynamically based on job state
+ */
+async function computeHealthStatus(job: Job): Promise<HealthStatus> {
+  const state = await job.getState();
+
+  // Check if job is stalled (processing for too long without progress)
+  const now = Date.now();
+  const processingTime = job.processedOn ? now - job.processedOn : 0;
+  const isStalled = state === 'active' && processingTime > appConfig.processing.stalledInterval;
+
+  if (isStalled) {
+    return HealthStatus.Stalled;
+  }
+
+  // Check if job recovered from failure
+  const wasRecovered = job.attemptsMade > 0 && state === 'completed';
+  if (wasRecovered) {
+    return HealthStatus.Recovered;
+  }
+
+  // Normal healthy state
+  if (state === 'completed' || state === 'active' || state === 'waiting' || state === 'delayed') {
+    return HealthStatus.Healthy;
+  }
+
+  // Unknown for other states
+  return HealthStatus.Unknown;
+}
 
 export async function createJob(
   request: FastifyRequest<{ Body: { filePath: string; priority?: JobPriority; metadata?: any } }>,
@@ -82,12 +119,16 @@ export async function createJob(
   return response;
 }
 
-function mapJobToResponse(job: any) {
-  // Derive status from BullMQ job state
+async function mapJobToResponse(job: Job) {
+  const state = await job.getState();
+  const healthStatus = await computeHealthStatus(job);
   let jobStatus = 'pending';
-  if (job.finishedOn) {
-    jobStatus = job.failedReason ? 'failed' : 'completed';
-  } else if (job.processedOn && !job.finishedOn) {
+
+  if (state === 'completed') {
+    jobStatus = 'completed';
+  } else if (state === 'failed') {
+    jobStatus = 'failed';
+  } else if (state === 'active') {
     jobStatus = 'processing';
   }
 
@@ -103,6 +144,7 @@ function mapJobToResponse(job: any) {
     attempts: job.attemptsMade,
     error: job.failedReason || null,
     fileSize: job.data.fileSize || null,
+    healthStatus,
   };
 }
 
@@ -123,7 +165,7 @@ export async function getAllJobs(
     jobs = await transcriptionQueue.getJobs(status, start, end);
     // Map JobStatus to BullMQ job types
     const statusMap = {
-      [JobStatus.PENDING]: 'waiting',
+      [JobStatus.PENDING]: ['waiting', 'delayed'],
       [JobStatus.PROCESSING]: 'active',
       [JobStatus.COMPLETED]: 'completed',
       [JobStatus.FAILED]: 'failed',
@@ -132,21 +174,24 @@ export async function getAllJobs(
     } as const;
 
     const bullStatus = statusMap[status];
-    total = await transcriptionQueue.queueInstance.getJobCountByTypes(bullStatus);
+    // getJobCountByTypes accepts array of statuses
+    total = await transcriptionQueue.queueInstance.getJobCountByTypes(
+      ...(Array.isArray(bullStatus) ? bullStatus : [bullStatus])
+    );
   } else {
     // Get all jobs (combined from all statuses)
-    const stats = await transcriptionQueue.getQueueStats();
-    total = stats.total;
+    // Use getJobCounts() for accurate pagination total (Story 2.3 requirement)
+    const counts = await transcriptionQueue.getJobCounts();
+    total = counts.total;
 
-    // For now, just get waiting jobs
     const start = (validated.page - 1) * validated.limit;
     const end = start + validated.limit - 1;
-    jobs = await transcriptionQueue.getJobs(JobStatus.PENDING, start, end);
+    jobs = await transcriptionQueue.getAllJobs(start, end);
   }
 
   const response: PaginatedResponse<any> = {
     success: true,
-    data: jobs.map(mapJobToResponse),
+    data: await Promise.all(jobs.map(mapJobToResponse)),
     pagination: {
       page: validated.page,
       limit: validated.limit,
@@ -175,15 +220,22 @@ export async function getJob(request: FastifyRequest<{ Params: { jobId: string }
     };
   }
 
+  const state = await job.getState();
+  const healthStatus = await computeHealthStatus(job);
+
   const response: ApiResponse = {
     success: true,
     data: {
       jobId: job.id,
       name: job.name,
+      status: state,
       data: job.data,
       progress: job.progress,
       attemptsMade: job.attemptsMade,
       failedReason: job.failedReason,
+      errorCode: job.data.errorCode || null,
+      errorReason: job.data.errorReason || job.failedReason || null,
+      healthStatus,
       stacktrace: job.stacktrace,
       returnvalue: job.returnvalue,
       finishedOn: job.finishedOn,
@@ -340,7 +392,8 @@ function processProjectJob(job: any, projectMap: Map<string, any>) {
   const projectName = pathParts.length > 1 ? pathParts[pathParts.length - 2] : 'Root';
 
   const project = getProjectFromMap(projectName, projectMap);
-  const jobStatus = job.data.status || (job.finishedOn ? 'completed' : job.processedOn ? 'processing' : 'pending');
+  const jobStatus =
+    job.data.status || (job.finishedOn ? 'completed' : job.processedOn ? 'processing' : 'pending');
 
   updateProjectStats(project, job, jobStatus);
 }
@@ -375,9 +428,53 @@ export async function getProjects(request: FastifyRequest, _reply: FastifyReply)
   return response;
 }
 
-export async function deleteJob(request: FastifyRequest<{ Params: { jobId: string } }>, _reply: FastifyReply) {
+export async function deleteJob(request: FastifyRequest<{ Params: { jobId: string } }>, reply: FastifyReply) {
   const { jobId } = request.params;
 
+  // Get job before deletion to access file paths
+  const job = await transcriptionQueue.getJob(jobId);
+
+  if (!job) {
+    return reply.code(404).send({
+      success: false,
+      error: 'Job not found',
+      timestamp: new Date().toISOString(),
+      requestId: request.id,
+    });
+  }
+
+  // Delete associated artifacts
+  const artifactsDeleted: string[] = [];
+  const artifactsFailed: string[] = [];
+
+  // Delete audio file if it exists
+  if (job.data.filePath) {
+    try {
+      await fs.unlink(job.data.filePath);
+      artifactsDeleted.push(job.data.filePath);
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        // Only log if error is not "file not found"
+        request.log.warn({ error, path: job.data.filePath }, 'Failed to delete audio file');
+        artifactsFailed.push(job.data.filePath);
+      }
+    }
+  }
+
+  // Delete transcript file if it exists
+  if (job.data.transcriptPath) {
+    try {
+      await fs.unlink(job.data.transcriptPath);
+      artifactsDeleted.push(job.data.transcriptPath);
+    } catch (error: any) {
+      if (error.code !== 'ENOENT') {
+        request.log.warn({ error, path: job.data.transcriptPath }, 'Failed to delete transcript file');
+        artifactsFailed.push(job.data.transcriptPath);
+      }
+    }
+  }
+
+  // Remove job from queue
   await transcriptionQueue.removeJob(jobId);
 
   const response: ApiResponse = {
@@ -385,6 +482,9 @@ export async function deleteJob(request: FastifyRequest<{ Params: { jobId: strin
     data: {
       jobId,
       message: 'Job deleted successfully',
+      artifactsDeleted: artifactsDeleted.length,
+      artifactsFailed: artifactsFailed.length,
+      deletedPaths: artifactsDeleted,
     },
     timestamp: new Date().toISOString(),
     requestId: request.id,
@@ -407,18 +507,82 @@ export async function retryJob(request: FastifyRequest<{ Params: { jobId: string
     });
   }
 
-  // Check if the job is in a failed state
+  // Check job state for idempotency and validation (Story 2.4)
   const state = await job.getState();
-  if (state !== 'failed') {
-    return reply.code(409).send({
+
+  // Idempotency: If job is already in a valid processing state, return success
+  if (state === 'waiting' || state === 'active') {
+    request.log.debug({ jobId, state }, 'Job is already in a valid state, skipping retry (idempotent)');
+    return {
+      success: true,
+      data: {
+        jobId,
+        message: `Job is already ${state}, no retry needed`,
+        state,
+      },
+      timestamp: new Date().toISOString(),
+      requestId: request.id,
+    };
+  }
+
+  // Prevent retry of completed jobs
+  if (state === 'completed') {
+    return reply.code(400).send({
       success: false,
-      error: `Job ${jobId} is not in the failed state. Current state: ${state}`,
+      error: 'Cannot retry a completed job. Consider deleting and re-uploading the file instead.',
       timestamp: new Date().toISOString(),
       requestId: request.id,
     });
   }
 
+  // Only proceed with retry for failed jobs
+  if (state !== 'failed') {
+    return reply.code(409).send({
+      success: false,
+      error: `Job ${jobId} cannot be retried. Current state: ${state}`,
+      timestamp: new Date().toISOString(),
+      requestId: request.id,
+    });
+  }
+
+  // Check if the input file exists and recover if needed
+  if (job.data.filePath) {
+    try {
+      await fs.access(job.data.filePath);
+    } catch (error) {
+      // Try to recover from failed directory using atomicMove (Story 2.4)
+      try {
+        const relativePath = relative(appConfig.processing.watchDirectory, job.data.filePath);
+        const failedPath = join(appConfig.processing.failedDirectory, relativePath);
+
+        await fs.access(failedPath);
+
+        // Move back to original location using atomicMove for cross-filesystem safety
+        await atomicMove(failedPath, job.data.filePath);
+        request.log.info(
+          { jobId, from: failedPath, to: job.data.filePath },
+          'Restored file from failed directory for retry'
+        );
+      } catch (recoveryError) {
+        return reply.code(400).send({
+          success: false,
+          error: `Input file not accessible: ${job.data.filePath}`,
+          timestamp: new Date().toISOString(),
+          requestId: request.id,
+        });
+      }
+    }
+  }
+
   try {
+    // Clear error fields before retrying (Story 2.4 requirement)
+    await job.updateData({
+      ...job.data,
+      errorCode: undefined,
+      errorReason: undefined,
+    });
+
+    // Re-inject job into queue
     await transcriptionQueue.retryJob(jobId);
 
     const response: ApiResponse = {

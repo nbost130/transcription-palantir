@@ -1,12 +1,12 @@
-import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock dependencies
 const mockLogger = {
-  info: mock(() => {}),
-  warn: mock(() => {}),
-  error: mock(() => {}),
-  debug: mock(() => {}),
-  fatal: mock(() => {}),
+  info: vi.fn(() => { }),
+  warn: vi.fn(() => { }),
+  error: vi.fn(() => { }),
+  debug: vi.fn(() => { }),
+  fatal: vi.fn(() => { }),
 };
 
 const mockConfig = {
@@ -31,82 +31,86 @@ const mockConfig = {
 
 // Mock BullMQ
 const mockQueueInstance = {
-  add: mock(async () => ({ id: 'job-123', data: {} })),
-  on: mock(() => {}),
-  close: mock(async () => {}),
-  getJob: mock(async () => null),
-  getJobCounts: mock(async () => ({ waiting: 0, active: 0, completed: 0, failed: 0 })),
-  pause: mock(async () => {}),
-  resume: mock(async () => {}),
-  clean: mock(async () => []),
-  waitUntilReady: mock(async () => {}),
+  add: vi.fn(async () => ({ id: 'job-123', data: {} })),
+  on: vi.fn(() => { }),
+  close: vi.fn(async () => { }),
+  getJob: vi.fn(async () => null),
+  getJobCounts: vi.fn(async () => ({ waiting: 0, active: 0, completed: 0, failed: 0 })),
+  pause: vi.fn(async () => { }),
+  resume: vi.fn(async () => { }),
+  clean: vi.fn(async () => []),
+  waitUntilReady: vi.fn(async () => { }),
 };
 
 const _mockWorkerInstance = {
-  on: mock(() => {}),
-  close: mock(async () => {}),
+  on: vi.fn(() => { }),
+  close: vi.fn(async () => { }),
 };
 
 const _mockQueueEventsInstance = {
-  on: mock(() => {}),
-  close: mock(async () => {}),
-  waitUntilReady: mock(async () => {}),
+  on: vi.fn(() => { }),
+  close: vi.fn(async () => { }),
+  waitUntilReady: vi.fn(async () => { }),
 };
 
-mock.module('../utils/logger.js', () => ({
+vi.mock('../utils/logger.js', () => ({
   logger: mockLogger,
   queueLogger: mockLogger,
   apiLogger: mockLogger,
   workerLogger: mockLogger,
   fileWatcherLogger: mockLogger,
   transcriptionLogger: mockLogger,
-  logQueueEvent: mock(() => {}),
-  logFileWatcherEvent: mock(() => {}),
-  logError: mock((...args) => console.error('MOCK ERROR:', ...args)),
+  logQueueEvent: vi.fn(() => { }),
+  logFileWatcherEvent: vi.fn(() => { }),
+  logError: vi.fn((...args) => console.error('MOCK ERROR:', ...args)),
 }));
 
-mock.module('../config/index.js', () => ({
+vi.mock('../config/index.js', () => ({
   appConfig: mockConfig,
   getRedisUrl: () => 'redis://localhost:6379',
 }));
 
 const mockFileTracker = {
-  connect: mock(async () => {}),
-  isProcessed: mock(async () => false),
-  markProcessed: mock(async () => {}),
+  connect: vi.fn(async () => { }),
+  isProcessed: vi.fn(async () => false),
+  markProcessed: vi.fn(async () => { }),
 };
 
 const mockChokidarWatcher = {
-  on: mock(function (this: any) {
+  on: vi.fn(function (this: any) {
     return this;
   }),
-  close: mock(async () => {}),
+  close: vi.fn(async () => { }),
 };
 
 const mockChokidar = {
-  watch: mock(() => mockChokidarWatcher),
+  watch: vi.fn(() => mockChokidarWatcher),
 };
 
 // Mock fs/promises
 const mockFs = {
-  stat: mock(async () => ({
+  stat: vi.fn(async () => ({
     isFile: () => true,
     isDirectory: () => true,
     size: 1024 * 1024 * 5, // 5MB
     birthtime: new Date(),
     mtime: new Date(),
   })),
-  access: mock(async () => {}),
-  readdir: mock(async () => []),
+  access: vi.fn(async () => { }),
+  readdir: vi.fn(async () => []),
+  rename: vi.fn(async () => { }),
+  writeFile: vi.fn(async () => { }),
+  readFile: vi.fn(async () => { }),
+  mkdir: vi.fn(async () => { }),
 };
 
-mock.module('./file-tracker.js', () => ({ fileTracker: mockFileTracker }));
-mock.module('chokidar', () => ({ default: mockChokidar }));
-mock.module('fs/promises', () => ({
+vi.mock('./file-tracker.js', () => ({ fileTracker: mockFileTracker }));
+vi.mock('chokidar', () => ({ default: mockChokidar }));
+vi.mock('fs/promises', () => ({
   ...mockFs,
   default: mockFs,
 }));
-mock.module('node:fs/promises', () => ({
+vi.mock('node:fs/promises', () => ({
   stat: mockFs.stat,
   access: mockFs.access,
   readdir: mockFs.readdir,
@@ -171,7 +175,7 @@ describe('FileWatcherService', () => {
 
       // Spy on transcriptionQueue.addJob
       const queueModule = await import('./queue');
-      const addJobSpy = spyOn(queueModule.transcriptionQueue, 'addJob');
+      const addJobSpy = vi.spyOn(queueModule.transcriptionQueue, 'addJob');
       addJobSpy.mockResolvedValue({ id: 'job-123' } as any);
 
       // Access private method for testing
@@ -193,7 +197,7 @@ describe('FileWatcherService', () => {
 
       // Spy on transcriptionQueue.addJob
       const queueModule = await import('./queue');
-      const addJobSpy = spyOn(queueModule.transcriptionQueue, 'addJob');
+      const addJobSpy = vi.spyOn(queueModule.transcriptionQueue, 'addJob');
 
       await (service as any).handleFileAdded(filePath);
 
@@ -211,7 +215,7 @@ describe('FileWatcherService', () => {
 
       // Spy on transcriptionQueue.addJob
       const queueModule = await import('./queue');
-      const addJobSpy = spyOn(queueModule.transcriptionQueue, 'addJob');
+      const addJobSpy = vi.spyOn(queueModule.transcriptionQueue, 'addJob');
 
       await (service as any).handleFileAdded(filePath);
 

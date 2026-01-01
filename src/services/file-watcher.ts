@@ -137,7 +137,17 @@ export class FileWatcherService {
 
   private async handleFileAdded(filePath: string): Promise<void> {
     try {
-      // Skip if already processed (check both in-memory and persistent storage)
+      // 1. Sanitize filename first
+      const sanitizedPath = await this.sanitizeFile(filePath);
+
+      // If file was renamed, we stop here. 
+      // The watcher will detect the "new" file (renamed version) and process it then.
+      if (sanitizedPath !== filePath) {
+        logger.info({ original: filePath, sanitized: sanitizedPath }, 'File renamed for sanitization');
+        return;
+      }
+
+      // 2. Skip if already processed (check both in-memory and persistent storage)
       if (this.processedFiles.has(filePath)) {
         return;
       }
@@ -181,6 +191,38 @@ export class FileWatcherService {
         'Error handling file'
       );
     }
+  }
+
+  // ===========================================================================
+  // SANITIZATION
+  // ===========================================================================
+
+  private async sanitizeFile(filePath: string): Promise<string> {
+    const dir = join(filePath, '..');
+    const ext = extname(filePath);
+    const name = basename(filePath, ext);
+
+    // Replace spaces with underscores, remove unsafe chars
+    const safeName = name
+      .replace(/\s+/g, '_')           // Spaces to underscores
+      .replace(/[^a-zA-Z0-9\-_\.]/g, '') // Remove non-alphanumeric (except -, _, and .)
+      .replace(/_+/g, '_');           // Dedupe underscores
+
+    const newFileName = `${safeName}${ext}`;
+    const newFilePath = join(dir, newFileName);
+
+    if (newFilePath !== filePath) {
+      try {
+        await import('fs/promises').then(fs => fs.rename(filePath, newFilePath));
+        return newFilePath;
+      } catch (error) {
+        logger.error({ error, filePath, newFilePath }, 'Failed to rename file for sanitization');
+        // If rename fails, return original path and try to process as is
+        return filePath;
+      }
+    }
+
+    return filePath;
   }
 
   // ===========================================================================
@@ -270,7 +312,10 @@ export class FileWatcherService {
 
   private async createJobForFile(filePath: string, metadata: FileMetadata): Promise<void> {
     try {
-      const jobId = randomUUID();
+      // Generate deterministic job ID based on file content/metadata
+      // This prevents duplicate jobs for the exact same file
+      const jobId = this.generateJobId(filePath, metadata);
+
       const jobData: Partial<TranscriptionJob> = {
         id: jobId,
         fileName: metadata.fileName,
@@ -291,20 +336,31 @@ export class FileWatcherService {
         },
       };
 
-      const job = await transcriptionQueue.addJob(jobData);
+      try {
+        const job = await transcriptionQueue.addJob(jobData);
 
-      // Mark file as processed in persistent storage
-      await fileTracker.markProcessed(filePath, jobId);
+        // Check if we got back an existing job (duplicate)
+        // Note: BullMQ returns the job instance. If it was a duplicate, 
+        // the timestamp might be older.
+        // However, standard BullMQ behavior with jobId is to return the existing job.
 
-      logger.info(
-        {
-          jobId: job.id,
-          fileName: metadata.fileName,
-          fileSize: `${metadata.fileSizeMB.toFixed(2)}MB`,
-          priority: metadata.priority,
-        },
-        '✅ Transcription job created'
-      );
+        // Mark file as processed in persistent storage
+        await fileTracker.markProcessed(filePath, jobId);
+
+        logger.info(
+          {
+            jobId: job.id,
+            fileName: metadata.fileName,
+            fileSize: `${metadata.fileSizeMB.toFixed(2)}MB`,
+            priority: metadata.priority,
+          },
+          '✅ Transcription job created (or existing job returned)'
+        );
+      } catch (error: any) {
+        // Handle case where job might already exist but in a state that causes error
+        logger.warn({ error, jobId }, 'Error adding job to queue (possible duplicate)');
+        throw error;
+      }
     } catch (error) {
       logger.error(
         {
@@ -316,6 +372,14 @@ export class FileWatcherService {
       );
       throw error;
     }
+  }
+
+  private generateJobId(filePath: string, metadata: FileMetadata): string {
+    const { createHash } = require('crypto');
+    // Create a unique hash based on file path, size, and modification time
+    // If any of these change, it's considered a new version of the file
+    const input = `${filePath}:${metadata.fileSize}:${metadata.modifiedAt.getTime()}`;
+    return createHash('md5').update(input).digest('hex');
   }
 
   // ===========================================================================

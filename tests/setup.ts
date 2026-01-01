@@ -1,26 +1,26 @@
-import { mock } from 'bun:test';
+import { vi } from 'vitest';
 import { mockQueueInstance, mockWorkerInstance, mockQueueEventsInstance } from './mocks';
 
 // Mock BullMQ
-mock.module('bullmq', () => ({
-    Queue: mock(() => mockQueueInstance),
-    Worker: mock(() => mockWorkerInstance),
-    QueueEvents: mock(() => mockQueueEventsInstance),
+vi.mock('bullmq', () => ({
+    Queue: vi.fn(() => mockQueueInstance),
+    Worker: vi.fn(() => mockWorkerInstance),
+    QueueEvents: vi.fn(() => mockQueueEventsInstance),
     Job: class { },
 }));
 
 // Mock Redis
-mock.module('ioredis', () => {
+vi.mock('ioredis', () => {
     class Redis {
         constructor() {
             // console.log('Redis mock constructor called');
         }
-        on = mock(() => { });
-        quit = mock(async () => { });
+        on = vi.fn(() => { });
+        quit = vi.fn(async () => { });
         status = 'ready';
-        connect = mock(async () => { });
-        disconnect = mock(async () => { });
-        duplicate = mock(() => this);
+        connect = vi.fn(async () => { });
+        disconnect = vi.fn(async () => { });
+        duplicate = vi.fn(() => this);
     };
     return {
         Redis,

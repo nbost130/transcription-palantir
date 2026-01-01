@@ -1,12 +1,12 @@
-import { beforeEach, describe, expect, it, mock } from 'bun:test';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock dependencies
 const mockLogger = {
-  info: mock(() => {}),
-  warn: mock(() => {}),
-  error: mock(() => {}),
-  debug: mock(() => {}),
-  fatal: mock(() => {}),
+  info: vi.fn(() => { }),
+  warn: vi.fn(() => { }),
+  error: vi.fn(() => { }),
+  debug: vi.fn(() => { }),
+  fatal: vi.fn(() => { }),
 };
 
 const mockConfig = {
@@ -21,49 +21,49 @@ const mockConfig = {
 };
 
 const mockFastifyInstance = {
-  register: mock(() => {}),
-  addHook: mock(() => {}),
-  get: mock(() => {}),
-  setErrorHandler: mock(() => {}),
-  listen: mock(async () => {}),
-  close: mock(async () => {}),
-  ready: mock(async () => {}),
+  register: vi.fn(() => { }),
+  addHook: vi.fn(() => { }),
+  get: vi.fn(() => { }),
+  setErrorHandler: vi.fn(() => { }),
+  listen: vi.fn(async () => { }),
+  close: vi.fn(async () => { }),
+  ready: vi.fn(async () => { }),
 };
 
 // Mock Fastify factory
-const mockFastify = mock(() => {
+const mockFastify = vi.fn(() => {
   return mockFastifyInstance;
 });
 
 // Mock routes
-const mockRoutes = async () => {};
+const mockRoutes = async () => { };
 
 // Mock modules
-mock.module('../utils/logger.js', () => ({ logger: mockLogger }));
-mock.module('../config/index.js', () => ({ appConfig: mockConfig }));
+vi.mock('../utils/logger.js', () => ({ logger: mockLogger }));
+vi.mock('../config/index.js', () => ({ appConfig: mockConfig }));
 
 // Mock fastify module
-mock.module('fastify', () => ({
+vi.mock('fastify', () => ({
   default: mockFastify,
   Fastify: mockFastify,
 }));
 
-mock.module('./routes/health.js', () => ({ healthRoutes: mockRoutes }));
-mock.module('./routes/jobs.js', () => ({ jobRoutes: mockRoutes }));
-mock.module('./routes/metrics.js', () => ({ metricsRoutes: mockRoutes }));
-mock.module('./routes/monitor.js', () => ({ monitorRoutes: mockRoutes }));
-mock.module('./routes/websocket.js', () => ({ websocketRoutes: mockRoutes }));
-mock.module('./routes/services.js', () => ({ default: mockRoutes }));
-mock.module('./routes/system.js', () => ({ systemRoutes: mockRoutes }));
-mock.module('./middleware/error.js', () => ({ errorHandler: () => {} }));
-mock.module('./middleware/logger.js', () => ({ requestLogger: () => {} }));
-mock.module('bullmq', () => ({
-  Queue: class {},
-  Worker: class {},
-  QueueEvents: class {},
-  Job: class {},
+vi.mock('./routes/health.js', () => ({ healthRoutes: mockRoutes }));
+vi.mock('./routes/jobs.js', () => ({ jobRoutes: mockRoutes }));
+vi.mock('./routes/metrics.js', () => ({ metricsRoutes: mockRoutes }));
+vi.mock('./routes/monitor.js', () => ({ monitorRoutes: mockRoutes }));
+vi.mock('./routes/websocket.js', () => ({ websocketRoutes: mockRoutes }));
+vi.mock('./routes/services.js', () => ({ default: mockRoutes }));
+vi.mock('./routes/system.js', () => ({ systemRoutes: mockRoutes }));
+vi.mock('./middleware/error.js', () => ({ errorHandler: () => { } }));
+vi.mock('./middleware/logger.js', () => ({ requestLogger: () => { } }));
+vi.mock('bullmq', () => ({
+  Queue: class { },
+  Worker: class { },
+  QueueEvents: class { },
+  Job: class { },
 }));
-mock.module('ioredis', () => ({ Redis: class {} }));
+vi.mock('ioredis', () => ({ Redis: class { } }));
 
 describe('ApiServer', () => {
   let ApiServer: any;

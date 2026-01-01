@@ -59,6 +59,8 @@ const EnvSchema = z.object({
   MIN_WORKERS: z.coerce.number().default(1),
   JOB_TIMEOUT: z.coerce.number().default(3600000),
   MAX_JOB_ATTEMPTS: z.coerce.number().default(3),
+  STALLED_INTERVAL: z.coerce.number().default(30000), // Check every 30s
+  LOCK_DURATION: z.coerce.number().default(60000), // 60s lock duration
 
   // API Configuration
   API_PREFIX: z.string().default('/api/v1'),
@@ -121,6 +123,8 @@ function createConfig(): AppConfig {
       minWorkers: env.MIN_WORKERS,
       jobTimeout: env.JOB_TIMEOUT,
       maxAttempts: env.MAX_JOB_ATTEMPTS,
+      stalledInterval: env.STALLED_INTERVAL,
+      lockDuration: env.LOCK_DURATION,
     },
 
     api: {

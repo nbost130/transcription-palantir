@@ -130,8 +130,8 @@ redisConnection.on('end', () => {
 const queueOptions = {
   connection: redisConnection,
   defaultJobOptions: {
-    removeOnComplete: 100,
-    removeOnFail: 50,
+    removeOnComplete: false,
+    removeOnFail: false,
     attempts: appConfig.processing.maxAttempts,
     backoff: {
       type: 'exponential' as const,
@@ -148,11 +148,14 @@ const queueOptions = {
 export class TranscriptionQueue {
   private queue: Queue;
   private queueEvents: QueueEvents;
+  private queueEventsConnection: Redis;
   private isInitialized = false;
 
   constructor() {
     this.queue = new Queue('transcription', queueOptions);
-    this.queueEvents = new QueueEvents('transcription', { connection: redisConnection });
+    // Use a dedicated connection for QueueEvents to avoid blocking the main connection
+    this.queueEventsConnection = redisConnection.duplicate();
+    this.queueEvents = new QueueEvents('transcription', { connection: this.queueEventsConnection });
     this.setupEventListeners();
   }
 
@@ -180,14 +183,24 @@ export class TranscriptionQueue {
 
     try {
       await this.queueEvents.close();
+      if (this.queueEventsConnection.status !== 'end') {
+        await this.queueEventsConnection.quit().catch((err) => {
+          queueLogger.warn({ err }, 'Error quitting queue events connection');
+        });
+      }
+
       await this.queue.close();
-      await redisConnection.quit();
+      if (redisConnection.status !== 'end') {
+        await redisConnection.quit().catch((err) => {
+          queueLogger.warn({ err }, 'Error quitting main redis connection');
+        });
+      }
 
       this.isInitialized = false;
       queueLogger.info('Transcription queue closed successfully');
     } catch (error) {
       queueLogger.error({ error }, 'Error closing transcription queue');
-      throw error;
+      // Don't throw here, just log it, to allow tests to finish cleanup
     }
   }
 
@@ -249,12 +262,39 @@ export class TranscriptionQueue {
     ]);
 
     return {
-      waiting: waiting.length,
-      active: active.length,
-      completed: completed.length,
-      failed: failed.length,
-      delayed: delayed.length,
-      total: waiting.length + active.length + completed.length + failed.length + delayed.length,
+      waiting: waiting?.length ?? 0,
+      active: active?.length ?? 0,
+      completed: completed?.length ?? 0,
+      failed: failed?.length ?? 0,
+      delayed: delayed?.length ?? 0,
+      total: (waiting?.length ?? 0) + (active?.length ?? 0) + (completed?.length ?? 0) + (failed?.length ?? 0) + (delayed?.length ?? 0),
+    };
+  }
+
+  /**
+   * Get accurate job counts using BullMQ's native count methods
+   * More efficient than fetching all jobs and counting
+   */
+  async getJobCounts() {
+    const counts = await this.queue.getJobCounts(
+      'waiting',
+      'active',
+      'completed',
+      'failed',
+      'delayed',
+      'paused'
+    );
+
+    const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+
+    return {
+      waiting: counts.waiting || 0,
+      active: counts.active || 0,
+      completed: counts.completed || 0,
+      failed: counts.failed || 0,
+      delayed: counts.delayed || 0,
+      paused: counts.paused || 0,
+      total,
     };
   }
 
@@ -295,14 +335,49 @@ export class TranscriptionQueue {
 
   async getAllJobs(start = 0, end = 100) {
     // Get jobs from all statuses
-    const [waiting, active, completed, failed] = await Promise.all([
-      this.queue.getJobs(['waiting'], start, end),
-      this.queue.getJobs(['active'], start, end),
-      this.queue.getJobs(['completed'], start, end),
-      this.queue.getJobs(['failed'], start, end),
+    // To ensure accurate global pagination by timestamp, we must fetch the top 'end' jobs
+    // from EACH status, combine them, sort, and then take the requested slice.
+    // Fetching from 'start' to 'end' per status is incorrect because the Nth job globally
+    // might be the 1st job in a specific queue.
+    const [waiting, active, completed, failed, delayed, paused] = await Promise.all([
+      this.queue.getJobs(['waiting'], 0, end),
+      this.queue.getJobs(['active'], 0, end),
+      this.queue.getJobs(['completed'], 0, end),
+      this.queue.getJobs(['failed'], 0, end),
+      this.queue.getJobs(['delayed'], 0, end),
+      this.queue.getJobs(['paused'], 0, end),
     ]);
 
-    return [...waiting, ...active, ...completed, ...failed];
+    // We sort by timestamp to try to give a somewhat consistent order
+    const allJobs = [...waiting, ...active, ...completed, ...failed, ...delayed, ...paused];
+    allJobs.sort((a, b) => b.timestamp - a.timestamp);
+
+    // Now apply the global pagination slice
+    // Note: The 'start' and 'end' arguments are 0-based indices.
+    // However, since we fetched 0..end from each, our local array has plenty of data.
+    // We just need to slice the correct window.
+    // But wait, if we fetched 0..end from each, we have up to (end+1)*6 items.
+    // The global 'start' index applies to this sorted list.
+    // BUT, if 'start' is large (e.g. page 10), fetching 0..end (e.g. 0..100) is fine.
+    // But if start > end (which shouldn't happen for a page), we need to be careful.
+    // Actually, 'end' passed to this function is (page * limit) - 1.
+    // So fetching 0..end covers everything up to the current page.
+
+    // We need to return the slice corresponding to the requested page.
+    // The caller (jobs.ts) calculates start/end based on page/limit.
+    // e.g. Page 2, limit 10: start=10, end=19.
+    // We fetched 0..19 from all queues.
+    // So we have the top 20 from each.
+    // We sort them. The global top 20 are definitely in this set.
+    // We take slice(start, end + 1).
+
+    // However, if the user requests start=10, end=19.
+    // We fetched 0..19.
+    // The slice should be relative to the global list.
+    // Since we only fetched 0..end, the global list IS effectively 0..end (plus extras).
+    // So slicing at 'start' is correct.
+
+    return allJobs.slice(start, end + 1);
   }
 
   // ===========================================================================

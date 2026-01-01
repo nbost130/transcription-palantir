@@ -5,7 +5,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { mkdir, readFile } from 'node:fs/promises';
+import { access, constants, mkdir, readFile } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
 import { appConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
@@ -217,6 +217,84 @@ export class FasterWhisperService {
       logger.error({ error, outputFile }, 'Failed to parse transcription output');
       throw new Error(`Failed to read transcription output: ${(error as Error).message}`);
     }
+  }
+
+  /**
+   * Check if Whisper binary is available (Story 2.6)
+   */
+  async checkBinaryAvailability(): Promise<{ available: boolean; path: string }> {
+    try {
+      await access(this.pythonPath, constants.X_OK);
+      return { available: true, path: this.pythonPath };
+    } catch (error) {
+      logger.warn({ pythonPath: this.pythonPath }, 'Whisper Python binary not accessible');
+      return { available: false, path: this.pythonPath };
+    }
+  }
+
+  /**
+   * Get Whisper version (Story 2.6)
+   */
+  async getVersion(): Promise<string | null> {
+    try {
+      // Check if binary is available first
+      const { available } = await this.checkBinaryAvailability();
+      if (!available) {
+        return null;
+      }
+
+      // Run a simple version check
+      return new Promise((resolve, reject) => {
+        const child = spawn(this.pythonPath, ['-c', 'import faster_whisper; print(faster_whisper.__version__)'], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          timeout: 5000,
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout?.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        child.stderr?.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        child.on('close', (code) => {
+          if (code === 0 && stdout.trim()) {
+            resolve(stdout.trim());
+          } else {
+            logger.warn({ code, stderr }, 'Failed to get faster-whisper version');
+            resolve('unknown');
+          }
+        });
+
+        child.on('error', (error) => {
+          logger.warn({ error }, 'Error getting faster-whisper version');
+          resolve('unknown');
+        });
+      });
+    } catch (error) {
+      logger.warn({ error }, 'Failed to check Whisper version');
+      return null;
+    }
+  }
+
+  /**
+   * Get health status for system health endpoint (Story 2.6)
+   */
+  async getHealthStatus(): Promise<{
+    whisperBinaryStatus: 'available' | 'missing';
+    whisperVersion: string | null;
+  }> {
+    const { available } = await this.checkBinaryAvailability();
+    const version = available ? await this.getVersion() : null;
+
+    return {
+      whisperBinaryStatus: available ? 'available' : 'missing',
+      whisperVersion: version,
+    };
   }
 }
 
