@@ -28,7 +28,10 @@ export class ProcessGuardService {
 
       if (portInUse) {
         const processInfo = await this.getProcessOnPort(appConfig.port);
-        logger.error({ port: appConfig.port, processInfo }, '🚨 Port already in use by another process');
+        logger.error(
+          { port: appConfig.port, processInfo },
+          '🚨 Port already in use by another process'
+        );
         return false;
       }
 
@@ -134,7 +137,9 @@ export class ProcessGuardService {
     try {
       // Find bun processes running our service (excluding current process)
       const currentPid = process.pid;
-      const { stdout } = await execAsync(`ps aux | grep "bun.*transcription-palantir.*dist/index.js" | grep -v grep`);
+      const { stdout } = await execAsync(
+        `ps aux | grep "bun.*transcription-palantir.*dist/index.js" | grep -v grep`
+      );
 
       if (!stdout.trim()) {
         return [];

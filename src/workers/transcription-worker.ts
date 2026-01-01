@@ -12,7 +12,12 @@ import { appConfig, getRedisUrl } from '../config/index.js';
 import { fasterWhisperService } from '../services/faster-whisper.js';
 import { fileTracker } from '../services/file-tracker.js';
 import { whisperService } from '../services/whisper.js';
-import { type ErrorCode, ErrorCodes, TranscriptionError, type TranscriptionJob } from '../types/index.js';
+import {
+  type ErrorCode,
+  ErrorCodes,
+  TranscriptionError,
+  type TranscriptionJob,
+} from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { fileManager } from './file-manager.js';
 
@@ -383,18 +388,32 @@ export class TranscriptionWorker {
         // Extract exit code from error message
         const match = errorMessage.match(/code (\d+)/);
         const exitCode = match ? parseInt(match[1], 10) : undefined;
-        throw TranscriptionError.fromCode(ErrorCodes.WHISPER_CRASH, { exitCode, originalError: errorMessage });
+        throw TranscriptionError.fromCode(ErrorCodes.WHISPER_CRASH, {
+          exitCode,
+          originalError: errorMessage,
+        });
       } else if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
-        throw TranscriptionError.fromCode(ErrorCodes.WHISPER_TIMEOUT, { originalError: errorMessage });
+        throw TranscriptionError.fromCode(ErrorCodes.WHISPER_TIMEOUT, {
+          originalError: errorMessage,
+        });
       } else if (errorMessage.includes('Failed to spawn') || errorMessage.includes('ENOENT')) {
-        throw TranscriptionError.fromCode(ErrorCodes.WHISPER_NOT_FOUND, { originalError: errorMessage });
-      } else if (errorMessage.includes('Failed to read transcription output') || errorMessage.includes('empty')) {
-        throw TranscriptionError.fromCode(ErrorCodes.WHISPER_INVALID_OUTPUT, { originalError: errorMessage });
+        throw TranscriptionError.fromCode(ErrorCodes.WHISPER_NOT_FOUND, {
+          originalError: errorMessage,
+        });
+      } else if (
+        errorMessage.includes('Failed to read transcription output') ||
+        errorMessage.includes('empty')
+      ) {
+        throw TranscriptionError.fromCode(ErrorCodes.WHISPER_INVALID_OUTPUT, {
+          originalError: errorMessage,
+        });
       } else if (errorMessage.includes('corrupted') || errorMessage.includes('invalid format')) {
         throw TranscriptionError.fromCode(ErrorCodes.FILE_INVALID, { originalError: errorMessage });
       } else {
         // Unknown Whisper error
-        throw TranscriptionError.fromCode(ErrorCodes.SYSTEM_UNKNOWN, { originalError: errorMessage });
+        throw TranscriptionError.fromCode(ErrorCodes.SYSTEM_UNKNOWN, {
+          originalError: errorMessage,
+        });
       }
     }
   }
@@ -454,7 +473,9 @@ To enable real transcription:
       processedJobs: this.processedJobs,
       failedJobs: this.failedJobs,
       successRate:
-        this.processedJobs > 0 ? ((this.processedJobs / (this.processedJobs + this.failedJobs)) * 100).toFixed(2) : 0,
+        this.processedJobs > 0
+          ? ((this.processedJobs / (this.processedJobs + this.failedJobs)) * 100).toFixed(2)
+          : 0,
     };
   }
 }

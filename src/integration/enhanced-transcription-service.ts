@@ -197,7 +197,9 @@ export class EnhancedTranscriptionService {
 
       // Get active jobs to properly distinguish processing vs pending
       const activeJobs = await this.queue.getJobs(JobStatus.PROCESSING, 0, 100);
-      const activeJobIds = new Set(activeJobs.map((job) => job.id).filter((id): id is string => id !== undefined));
+      const activeJobIds = new Set(
+        activeJobs.map((job) => job.id).filter((id): id is string => id !== undefined)
+      );
 
       // Map to dashboard format with proper status mapping
       const dashboardJobs = allJobs.map((job) => this.mapJobToDashboardFormat(job, activeJobIds));
@@ -205,7 +207,10 @@ export class EnhancedTranscriptionService {
       // Separate recent jobs and Orbis jobs
       const recentJobs = dashboardJobs.slice(0, 100); // Limit recent jobs
       const orbisJobs = dashboardJobs.filter(
-        (job) => job.filePath?.includes('Orbis') || job.fileName?.includes('LESSON') || job.fileName?.includes('Orbis')
+        (job) =>
+          job.filePath?.includes('Orbis') ||
+          job.fileName?.includes('LESSON') ||
+          job.fileName?.includes('Orbis')
       );
 
       return { recentJobs, orbisJobs };
@@ -241,7 +246,10 @@ export class EnhancedTranscriptionService {
       status,
       createdAt: new Date(job.timestamp).toISOString(),
       startedAt: job.processedOn ? new Date(job.processedOn).toISOString() : undefined,
-      completedAt: job.finishedOn && status === 'completed' ? new Date(job.finishedOn).toISOString() : undefined,
+      completedAt:
+        job.finishedOn && status === 'completed'
+          ? new Date(job.finishedOn).toISOString()
+          : undefined,
       error: job.failedReason || '',
       fileSize: job.data.fileSize,
       outputPath: job.data.outputPath,

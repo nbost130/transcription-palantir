@@ -152,8 +152,14 @@ describe('FileWatcherService', () => {
       await service.start();
 
       expect(mockFileTracker.connect).toHaveBeenCalled();
-      expect(mockFs.access).toHaveBeenCalledWith(mockConfig.processing.watchDirectory, expect.anything());
-      expect(mockChokidar.watch).toHaveBeenCalledWith(mockConfig.processing.watchDirectory, expect.anything());
+      expect(mockFs.access).toHaveBeenCalledWith(
+        mockConfig.processing.watchDirectory,
+        expect.anything()
+      );
+      expect(mockChokidar.watch).toHaveBeenCalledWith(
+        mockConfig.processing.watchDirectory,
+        expect.anything()
+      );
       expect(service.running).toBe(true);
     });
 
@@ -186,7 +192,10 @@ describe('FileWatcherService', () => {
       expect(addJobSpy).toHaveBeenCalled();
 
       expect(mockFileTracker.markProcessed).toHaveBeenCalledWith(filePath, expect.any(String));
-      expect(mockLogger.info).toHaveBeenCalledWith(expect.objectContaining({ filePath }), 'New file detected');
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        expect.objectContaining({ filePath }),
+        'New file detected'
+      );
 
       addJobSpy.mockRestore();
     });

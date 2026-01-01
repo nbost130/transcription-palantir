@@ -18,7 +18,7 @@ import { errorHandler } from './middleware/error.js';
 import { requestLogger } from './middleware/logger.js';
 import { healthRoutes } from './routes/health.js';
 import { jobRoutes } from './routes/jobs.js';
-// import { metricsRoutes } from './routes/metrics.js'; // TODO: Implement prometheus service first
+import { metricsRoutes } from './routes/metrics.js';
 import { monitorRoutes } from './routes/monitor.js';
 import servicesRoutes from './routes/services.js';
 import { systemRoutes } from './routes/system.js';
@@ -197,13 +197,15 @@ export class ApiServer {
     // Request logging (also attaches startTime to request)
     fastify.addHook('onRequest', requestLogger);
 
-    // Add response time header
+    // Add response time header and API version header
     fastify.addHook('onSend', async (request, reply) => {
       const startTime = (request as any).startTime;
       if (startTime) {
         const duration = Date.now() - startTime;
         reply.header('X-Response-Time', `${duration}ms`);
       }
+      // Add API version header for version detection
+      reply.header('X-API-Version', '1.0.0');
     });
   }
 
@@ -237,8 +239,8 @@ export class ApiServer {
     // System information routes
     fastify.register(systemRoutes, { prefix });
 
-    // Metrics routes (Prometheus) - TODO: Implement prometheus service first
-    // fastify.register(metricsRoutes, { prefix });
+    // Metrics routes (Prometheus)
+    fastify.register(metricsRoutes, { prefix });
 
     // Monitoring dashboard routes
     fastify.register(monitorRoutes, { prefix });
