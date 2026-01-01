@@ -43,8 +43,8 @@ async function computeHealthStatus(job: Job): Promise<HealthStatus> {
     return HealthStatus.Recovered;
   }
 
-  // Normal healthy state
-  if (state === 'completed' || state === 'active' || state === 'waiting' || state === 'delayed') {
+  // Normal healthy state (including prioritized in BullMQ 5)
+  if (state === 'completed' || state === 'active' || state === 'waiting' || state === 'delayed' || state === 'prioritized') {
     return HealthStatus.Healthy;
   }
 
@@ -165,7 +165,7 @@ export async function getAllJobs(
     jobs = await transcriptionQueue.getJobs(status, start, end);
     // Map JobStatus to BullMQ job types
     const statusMap = {
-      [JobStatus.PENDING]: ['waiting', 'delayed'],
+      [JobStatus.PENDING]: ['waiting', 'prioritized', 'delayed'], // BullMQ 5: prioritized stored separately
       [JobStatus.PROCESSING]: 'active',
       [JobStatus.COMPLETED]: 'completed',
       [JobStatus.FAILED]: 'failed',
