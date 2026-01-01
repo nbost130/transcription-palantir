@@ -60,10 +60,13 @@ RUN apk add --no-cache \
     && rm -rf /var/cache/apk/*
 
 # Clone and build Whisper.cpp
+# NOTE: The whisper.cpp project builds an executable named 'whisper' (not 'main')
+# This was changed in the upstream project. If this breaks in the future, check:
+# https://github.com/ggerganov/whisper.cpp for the current executable name
 RUN git clone https://github.com/ggerganov/whisper.cpp.git /tmp/whisper.cpp \
     && cd /tmp/whisper.cpp \
     && make \
-    && cp main /usr/local/bin/whisper \
+    && cp whisper /usr/local/bin/whisper \
     && cp models/download-ggml-model.sh /usr/local/bin/ \
     && chmod +x /usr/local/bin/whisper /usr/local/bin/download-ggml-model.sh
 
