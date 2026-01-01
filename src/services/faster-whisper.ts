@@ -4,10 +4,9 @@
  * Python-based faster-whisper integration for high-performance transcription
  */
 
-import { spawn } from 'child_process';
-import { access, mkdir, readFile, writeFile } from 'fs/promises';
-import { constants } from 'fs';
-import { join, dirname, basename, extname } from 'path';
+import { spawn } from 'node:child_process';
+import { access, constants, mkdir, readFile } from 'node:fs/promises';
+import { basename, extname, join } from 'node:path';
 import { appConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
@@ -80,12 +79,15 @@ export class FasterWhisperService {
     // Build command arguments
     const args = this.buildPythonArgs(inputFile, outputFile, options);
 
-    logger.info({
-      inputFile,
-      outputFile,
-      model: options.model || 'large-v3',
-      device: options.device || 'cpu',
-    }, 'Starting faster-whisper transcription');
+    logger.info(
+      {
+        inputFile,
+        outputFile,
+        model: options.model || 'large-v3',
+        device: options.device || 'cpu',
+      },
+      'Starting faster-whisper transcription'
+    );
 
     try {
       // Run faster-whisper Python script (file growth monitor detects stuck processes)
@@ -106,18 +108,19 @@ export class FasterWhisperService {
   /**
    * Build Python script arguments
    */
-  private buildPythonArgs(
-    inputFile: string,
-    outputFile: string,
-    options: FasterWhisperOptions
-  ): string[] {
+  private buildPythonArgs(inputFile: string, outputFile: string, options: FasterWhisperOptions): string[] {
     const args = [
       this.scriptPath,
-      '--input', inputFile,
-      '--output', outputFile,
-      '--model', options.model || 'large-v3',
-      '--device', options.device || 'cpu',
-      '--compute_type', options.computeType || 'float16',
+      '--input',
+      inputFile,
+      '--output',
+      outputFile,
+      '--model',
+      options.model || 'large-v3',
+      '--device',
+      options.device || 'cpu',
+      '--compute_type',
+      options.computeType || 'float16',
     ];
 
     if (options.language && options.language !== 'auto') {
@@ -157,7 +160,7 @@ export class FasterWhisperService {
       });
 
       let stderr = '';
-      let stdout = '';
+      let _stdout = '';
       let isResolved = false;
 
       // Log start without timeout - file growth monitor will detect stuck processes
@@ -172,7 +175,7 @@ export class FasterWhisperService {
       });
 
       child.stdout?.on('data', (data) => {
-        stdout += data.toString();
+        _stdout += data.toString();
       });
 
       child.on('close', (code) => {
@@ -223,7 +226,7 @@ export class FasterWhisperService {
     try {
       await access(this.pythonPath, constants.X_OK);
       return { available: true, path: this.pythonPath };
-    } catch (error) {
+    } catch (_error) {
       logger.warn({ pythonPath: this.pythonPath }, 'Whisper Python binary not accessible');
       return { available: false, path: this.pythonPath };
     }
@@ -241,7 +244,7 @@ export class FasterWhisperService {
       }
 
       // Run a simple version check
-      return new Promise((resolve, reject) => {
+      return new Promise((resolve, _reject) => {
         const child = spawn(this.pythonPath, ['-c', 'import faster_whisper; print(faster_whisper.__version__)'], {
           stdio: ['ignore', 'pipe', 'pipe'],
           timeout: 5000,
@@ -293,7 +296,6 @@ export class FasterWhisperService {
       whisperVersion: version,
     };
   }
-
 }
 
 export const fasterWhisperService = new FasterWhisperService();

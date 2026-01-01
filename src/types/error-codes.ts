@@ -29,7 +29,7 @@ export const ErrorCodes = {
   SYSTEM_UNKNOWN: 'ERR_SYSTEM_UNKNOWN',
 } as const;
 
-export type ErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes];
+export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
 /**
  * Helper to get human-readable error reason from error code and context
@@ -77,8 +77,6 @@ export function getErrorReason(errorCode: ErrorCode, context?: Record<string, an
 
     case ErrorCodes.SYSTEM_OUT_OF_DISK:
       return 'System ran out of disk space';
-
-    case ErrorCodes.SYSTEM_UNKNOWN:
     default:
       return context?.message || 'An unknown error occurred during processing';
   }

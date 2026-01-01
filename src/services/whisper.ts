@@ -4,11 +4,11 @@
  * TypeScript wrapper for Whisper.cpp CLI transcription engine
  */
 
-import { spawn } from 'child_process';
-import { access, mkdir, readFile, writeFile } from 'fs/promises';
-import { constants } from 'fs';
-import { join, dirname, basename, extname } from 'path';
-import { appConfig, getWhisperCommand } from '../config/index.js';
+import { spawn } from 'node:child_process';
+import { constants } from 'node:fs';
+import { access, mkdir, readFile } from 'node:fs/promises';
+import { basename, dirname, extname, join } from 'node:path';
+import { appConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
 // =============================================================================
@@ -78,7 +78,7 @@ export class WhisperService {
       await access(this.binaryPath, constants.X_OK);
       logger.debug({ path: this.binaryPath }, 'Whisper.cpp binary found');
       return true;
-    } catch (error) {
+    } catch (_error) {
       logger.warn({ path: this.binaryPath }, 'Whisper.cpp binary not found or not executable');
       return false;
     }
@@ -90,14 +90,14 @@ export class WhisperService {
   async validateModel(modelName: string): Promise<boolean> {
     // Handle both full path and model name
     const modelPath = modelName.includes('/')
-      ? modelName  // Full path provided
-      : join(this.modelsPath, `ggml-${modelName}.bin`);  // Just model name
+      ? modelName // Full path provided
+      : join(this.modelsPath, `ggml-${modelName}.bin`); // Just model name
 
     try {
       await access(modelPath, constants.R_OK);
       logger.debug({ model: modelName, path: modelPath }, 'Whisper model found');
       return true;
-    } catch (error) {
+    } catch (_error) {
       logger.warn({ model: modelName, path: modelPath }, 'Whisper model not found');
       return false;
     }
@@ -136,7 +136,7 @@ export class WhisperService {
     if (!binaryExists) {
       throw new Error(
         `Whisper.cpp binary not found at ${this.binaryPath}. ` +
-        'Please install Whisper.cpp and update WHISPER_BINARY_PATH in your .env file.'
+          'Please install Whisper.cpp and update WHISPER_BINARY_PATH in your .env file.'
       );
     }
 
@@ -146,7 +146,7 @@ export class WhisperService {
     if (!modelExists) {
       throw new Error(
         `Whisper model '${model}' not found. ` +
-        `Please download the model or use one of: ${(await this.getInstalledModels()).join(', ')}`
+          `Please download the model or use one of: ${(await this.getInstalledModels()).join(', ')}`
       );
     }
 
@@ -161,13 +161,16 @@ export class WhisperService {
     // Build command
     const args = this.buildWhisperArgs(inputFile, outputDir, baseName, options);
 
-    logger.info({
-      inputFile,
-      outputFile,
-      model,
-      language: options.language,
-      task: options.task,
-    }, 'Starting Whisper.cpp transcription');
+    logger.info(
+      {
+        inputFile,
+        outputFile,
+        model,
+        language: options.language,
+        task: options.task,
+      },
+      'Starting Whisper.cpp transcription'
+    );
 
     try {
       // Run Whisper.cpp
@@ -192,26 +195,33 @@ export class WhisperService {
   /**
    * Build Whisper.cpp command arguments
    */
-  private buildWhisperArgs(
-    inputFile: string,
-    outputDir: string,
-    baseName: string,
-    options: WhisperOptions
-  ): string[] {
+  /**
+   * Build Whisper.cpp command arguments
+   */
+  private buildWhisperArgs(inputFile: string, outputDir: string, baseName: string, options: WhisperOptions): string[] {
     const model = options.model || appConfig.whisper.model;
+    const modelPath = model.includes('/')
+      ? model // Full path provided
+      : join(this.modelsPath, `ggml-${model}.bin`); // Just model name
+
+    const args = ['-m', modelPath, '-f', inputFile];
+
+    this.addBasicArgs(args, options);
+    this.addFormatArgs(args, outputDir, baseName, options);
+    this.addPerformanceArgs(args, options);
+    this.addVadArgs(args, options);
+
+    // Verbose output
+    if (options.verbose) {
+      args.push('-v');
+    }
+
+    return args;
+  }
+
+  private addBasicArgs(args: string[], options: WhisperOptions) {
     const language = options.language || appConfig.whisper.language;
     const task = options.task || appConfig.whisper.task;
-    const outputFormat = options.outputFormat || 'txt';
-
-    // Handle both full path and model name
-    const modelPath = model.includes('/')
-      ? model  // Full path provided
-      : join(this.modelsPath, `ggml-${model}.bin`);  // Just model name
-
-    const args = [
-      '-m', modelPath,
-      '-f', inputFile,
-    ];
 
     // Language (auto-detection if 'auto')
     if (language && language !== 'auto') {
@@ -222,21 +232,32 @@ export class WhisperService {
     if (task === 'translate') {
       args.push('--translate');
     }
+  }
+
+  private addFormatArgs(args: string[], outputDir: string, baseName: string, options: WhisperOptions) {
+    const outputFormat = options.outputFormat || 'txt';
 
     // Output format (use proper flags like --output-txt)
-    if (outputFormat === 'txt') {
-      args.push('--output-txt');
-    } else if (outputFormat === 'json') {
-      args.push('--output-json');
-    } else if (outputFormat === 'srt') {
-      args.push('--output-srt');
-    } else if (outputFormat === 'vtt') {
-      args.push('--output-vtt');
+    switch (outputFormat) {
+      case 'txt':
+        args.push('--output-txt');
+        break;
+      case 'json':
+        args.push('--output-json');
+        break;
+      case 'srt':
+        args.push('--output-srt');
+        break;
+      case 'vtt':
+        args.push('--output-vtt');
+        break;
     }
 
     // Output file path (without extension)
     args.push('--output-file', join(outputDir, baseName));
+  }
 
+  private addPerformanceArgs(args: string[], options: WhisperOptions) {
     // Threading - use all available cores by default
     const threads = options.threads || 8; // Default to 8 cores for your hardware
     args.push('-t', threads.toString());
@@ -256,6 +277,13 @@ export class WhisperService {
       args.push('-tp', options.temperature.toString());
     }
 
+    // Flash attention (enabled by default, can disable)
+    if (options.flashAttention === false) {
+      args.push('-nfa');
+    }
+  }
+
+  private addVadArgs(args: string[], options: WhisperOptions) {
     // Voice Activity Detection
     if (options.vadEnabled) {
       args.push('--vad');
@@ -272,27 +300,12 @@ export class WhisperService {
         args.push('-vsd', options.vadMinSilenceDuration.toString());
       }
     }
-
-    // Flash attention (enabled by default, can disable)
-    if (options.flashAttention === false) {
-      args.push('-nfa');
-    }
-
-    // Verbose output
-    if (options.verbose) {
-      args.push('-v');
-    }
-
-    return args;
   }
 
   /**
    * Run Whisper.cpp binary and capture output
    */
-  private async runWhisper(
-    args: string[],
-    onProgress?: (progress: WhisperProgress) => void
-  ): Promise<void> {
+  private async runWhisper(args: string[], onProgress?: (progress: WhisperProgress) => void): Promise<void> {
     return new Promise((resolve, reject) => {
       const child = spawn(this.binaryPath, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -336,9 +349,7 @@ export class WhisperService {
           }
           resolve();
         } else {
-          const error = new Error(
-            `Whisper.cpp exited with code ${code}. stderr: ${stderr}`
-          );
+          const error = new Error(`Whisper.cpp exited with code ${code}. stderr: ${stderr}`);
           reject(error);
         }
       });
@@ -353,10 +364,7 @@ export class WhisperService {
   /**
    * Parse transcription output file
    */
-  private async parseTranscriptionOutput(
-    outputFile: string,
-    format: string
-  ): Promise<TranscriptionResult> {
+  private async parseTranscriptionOutput(outputFile: string, format: string): Promise<TranscriptionResult> {
     try {
       const content = await readFile(outputFile, 'utf-8');
 

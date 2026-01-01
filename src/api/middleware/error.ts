@@ -5,32 +5,31 @@
  */
 
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
-import { logger } from '../../utils/logger.js';
 import { ZodError } from 'zod';
+import { logger } from '../../utils/logger.js';
 
 // =============================================================================
 // ERROR HANDLER
 // =============================================================================
 
-export async function errorHandler(
-  error: FastifyError,
-  request: FastifyRequest,
-  reply: FastifyReply
-): Promise<void> {
+export async function errorHandler(error: FastifyError, request: FastifyRequest, reply: FastifyReply): Promise<void> {
   const requestId = request.id;
 
   // Log the error
-  logger.error({
-    error: {
-      message: error.message,
-      stack: error.stack,
-      code: error.code,
-      statusCode: error.statusCode,
+  logger.error(
+    {
+      error: {
+        message: error.message,
+        stack: error.stack,
+        code: error.code,
+        statusCode: error.statusCode,
+      },
+      requestId,
+      method: request.method,
+      url: request.url,
     },
-    requestId,
-    method: request.method,
-    url: request.url,
-  }, 'Request error');
+    'Request error'
+  );
 
   // Handle Zod validation errors
   if (error instanceof ZodError) {
@@ -105,9 +104,7 @@ export async function errorHandler(
 
   // Default error response
   const statusCode = error.statusCode || 500;
-  const message = statusCode === 500
-    ? 'Internal server error'
-    : error.message || 'An error occurred';
+  const message = statusCode === 500 ? 'Internal server error' : error.message || 'An error occurred';
 
   reply.status(statusCode).send({
     success: false,

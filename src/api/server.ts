@@ -4,25 +4,25 @@
  * Fastify-based REST API for job management and monitoring
  */
 
-import Fastify from 'fastify';
-import type { FastifyInstance, FastifyServerOptions } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import websocket from '@fastify/websocket';
+import type { FastifyInstance, FastifyServerOptions } from 'fastify';
+import Fastify from 'fastify';
 import { appConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
+import { errorHandler } from './middleware/error.js';
+import { requestLogger } from './middleware/logger.js';
 import { healthRoutes } from './routes/health.js';
 import { jobRoutes } from './routes/jobs.js';
 // import { metricsRoutes } from './routes/metrics.js'; // TODO: Implement prometheus service first
 import { monitorRoutes } from './routes/monitor.js';
-import { websocketRoutes } from './routes/websocket.js';
 import servicesRoutes from './routes/services.js';
-import { systemRoutes } from './routes/system-routes.js';
-import { errorHandler } from './middleware/error.js';
-import { requestLogger } from './middleware/logger.js';
+import { systemRoutes } from './routes/system.js';
+import { websocketRoutes } from './routes/websocket.js';
 
 // =============================================================================
 // API SERVER CLASS
@@ -73,11 +73,12 @@ export class ApiServer {
   private registerPlugins(fastify: FastifyInstance): void {
     // CORS Configuration
     // Parse CORS_ORIGIN - can be '*', a single origin, or comma-separated list
-    const allowedOrigins = appConfig.api.corsOrigin === '*'
-      ? ['*']
-      : appConfig.api.corsOrigin.includes(',')
-        ? appConfig.api.corsOrigin.split(',').map(o => o.trim())
-        : [appConfig.api.corsOrigin];
+    const allowedOrigins =
+      appConfig.api.corsOrigin === '*'
+        ? ['*']
+        : appConfig.api.corsOrigin.includes(',')
+          ? appConfig.api.corsOrigin.split(',').map((o) => o.trim())
+          : [appConfig.api.corsOrigin];
 
     fastify.register(cors, {
       origin: (origin, callback) => {
@@ -116,7 +117,7 @@ export class ApiServer {
     fastify.register(rateLimit, {
       max: appConfig.api.rateLimitMax,
       timeWindow: appConfig.api.rateLimitWindow,
-      errorResponseBuilder: (req, context) => {
+      errorResponseBuilder: (_req, context) => {
         return {
           success: false,
           error: 'Rate limit exceeded',
@@ -214,7 +215,7 @@ export class ApiServer {
     const prefix = appConfig.api.prefix;
 
     // Root endpoint
-    fastify.get('/', async (request, reply) => {
+    fastify.get('/', async (_request, _reply) => {
       return {
         name: 'Transcription Palantir API',
         version: '1.0.0',

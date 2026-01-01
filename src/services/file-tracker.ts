@@ -5,12 +5,11 @@
  * across service restarts and ensure idempotent file processing.
  */
 
-import type { Redis } from 'ioredis';
-import { Redis as IORedis } from 'ioredis';
-import { createHash } from 'crypto';
-import { stat } from 'fs/promises';
+import { createHash } from 'node:crypto';
+import { stat } from 'node:fs/promises';
+import { Redis as IORedis, type Redis } from 'ioredis';
+import { appConfig, getRedisUrl } from '../config/index.js';
 import { logger } from '../utils/logger.js';
-import { getRedisUrl, appConfig } from '../config/index.js';
 
 // =============================================================================
 // CONSTANTS
@@ -201,7 +200,7 @@ export class FileTrackerService {
       // Hash based on file path, size, and mtime for efficient duplicate detection
       const hashInput = `${filePath}:${stats.size}:${stats.mtimeMs}`;
       return createHash('sha256').update(hashInput).digest('hex');
-    } catch (error) {
+    } catch (_error) {
       // If we can't stat the file, just hash the path
       return createHash('sha256').update(filePath).digest('hex');
     }
@@ -238,4 +237,3 @@ interface ProcessedFileMetadata {
 // =============================================================================
 
 export const fileTracker = new FileTrackerService();
-

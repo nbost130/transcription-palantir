@@ -4,11 +4,11 @@
  * BullMQ-based job queue management for transcription tasks
  */
 
-import { Queue, Worker, Job, QueueEvents } from 'bullmq';
+import { type Job, Queue, QueueEvents } from 'bullmq';
 import { Redis } from 'ioredis';
 import { appConfig, getRedisUrl } from '../config/index.js';
-import { queueLogger, logQueueEvent } from '../utils/logger.js';
 import { JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js';
+import { logQueueEvent, queueLogger } from '../utils/logger.js';
 
 // =============================================================================
 // REDIS CONNECTION
@@ -36,19 +36,13 @@ const redisConnection = new Redis(getRedisUrl(), {
    */
   retryStrategy(times: number): number | null {
     if (times > appConfig.redis.maxRetries) {
-      queueLogger.error(
-        { attempts: times },
-        'Max Redis connection retries exceeded, giving up'
-      );
+      queueLogger.error({ attempts: times }, 'Max Redis connection retries exceeded, giving up');
       return null; // Stop retrying
     }
 
     // Exponential backoff: min(times * 50, 2000)ms
     const delay = Math.min(times * 50, 2000);
-    queueLogger.warn(
-      { attempt: times, delayMs: delay },
-      'Redis connection failed, retrying...'
-    );
+    queueLogger.warn({ attempt: times, delayMs: delay }, 'Redis connection failed, retrying...');
     return delay;
   },
 
@@ -64,23 +58,18 @@ const redisConnection = new Redis(getRedisUrl(), {
 
     // List of transient errors that should trigger reconnection
     const transientErrors = [
-      'ECONNREFUSED',  // Connection refused
-      'ENOTFOUND',     // DNS resolution failed
-      'ETIMEDOUT',     // Connection timeout
-      'ECONNRESET',    // Connection reset by peer
-      'EPIPE',         // Broken pipe
-      'READONLY',      // Redis in readonly mode (failover)
+      'ECONNREFUSED', // Connection refused
+      'ENOTFOUND', // DNS resolution failed
+      'ETIMEDOUT', // Connection timeout
+      'ECONNRESET', // Connection reset by peer
+      'EPIPE', // Broken pipe
+      'READONLY', // Redis in readonly mode (failover)
     ];
 
-    const shouldReconnect = transientErrors.some(errCode =>
-      err.message.includes(errCode)
-    );
+    const shouldReconnect = transientErrors.some((errCode) => err.message.includes(errCode));
 
     if (shouldReconnect) {
-      queueLogger.warn(
-        { error: err.message },
-        'Transient Redis error detected, reconnecting...'
-      );
+      queueLogger.warn({ error: err.message }, 'Transient Redis error detected, reconnecting...');
       return true; // Reconnect but don't resend failed command
     }
 
@@ -278,7 +267,12 @@ export class TranscriptionQueue {
       completed: completed?.length ?? 0,
       failed: failed?.length ?? 0,
       delayed: delayed?.length ?? 0,
-      total: (waiting?.length ?? 0) + (active?.length ?? 0) + (completed?.length ?? 0) + (failed?.length ?? 0) + (delayed?.length ?? 0),
+      total:
+        (waiting?.length ?? 0) +
+        (active?.length ?? 0) +
+        (completed?.length ?? 0) +
+        (failed?.length ?? 0) +
+        (delayed?.length ?? 0),
     };
   }
 
@@ -287,14 +281,7 @@ export class TranscriptionQueue {
    * More efficient than fetching all jobs and counting
    */
   async getJobCounts() {
-    const counts = await this.queue.getJobCounts(
-      'waiting',
-      'active',
-      'completed',
-      'failed',
-      'delayed',
-      'paused'
-    );
+    const counts = await this.queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused');
 
     const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
 
@@ -313,7 +300,7 @@ export class TranscriptionQueue {
     if (status === JobStatus.PENDING) {
       // For pending jobs, we need to combine delayed and waiting queues
       // but respect the pagination limits
-      const limit = end - start + 1;
+      const _limit = end - start + 1;
 
       // Get jobs from both queues with generous limits
       const [delayedJobs, waitingJobs] = await Promise.all([
@@ -484,12 +471,15 @@ export class TranscriptionQueue {
     const oldPriority = job.data.priority;
     const isActive = await job.isActive();
 
-    queueLogger.info({
-      jobId,
-      oldPriority,
-      newPriority: priority,
-      isActive
-    }, 'Starting priority update');
+    queueLogger.info(
+      {
+        jobId,
+        oldPriority,
+        newPriority: priority,
+        isActive,
+      },
+      'Starting priority update'
+    );
 
     if (isActive) {
       // For active (processing) jobs, just update the data priority
@@ -503,7 +493,10 @@ export class TranscriptionQueue {
       const newDelay = this.calculateDelay(priority);
       const jobData = { ...job.data, priority };
 
-      queueLogger.info({ jobId, oldPriority, newPriority: priority, delay: newDelay }, 'Updating pending job priority (remove + re-add)');
+      queueLogger.info(
+        { jobId, oldPriority, newPriority: priority, delay: newDelay },
+        'Updating pending job priority (remove + re-add)'
+      );
 
       // Remove the existing job first
       await job.remove();
@@ -511,15 +504,14 @@ export class TranscriptionQueue {
 
       // Add the job back with new priority and delay
       // BullMQ will generate a new job ID
-      const newJob = await this.queue.add(
-        job.name,
-        jobData,
-        {
-          priority,
-          delay: newDelay,
-        },
+      const newJob = await this.queue.add(job.name, jobData, {
+        priority,
+        delay: newDelay,
+      });
+      queueLogger.info(
+        { oldJobId: jobId, newJobId: newJob.id, priority, delay: newDelay },
+        'Job re-added with new priority'
       );
-      queueLogger.info({ oldJobId: jobId, newJobId: newJob.id, priority, delay: newDelay }, 'Job re-added with new priority');
 
       // Update the jobId for the return value
       jobId = newJob.id!;

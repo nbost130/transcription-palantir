@@ -1,16 +1,17 @@
 #!/usr/bin/env bun
+
 /**
  * 🔮 Background Services Launcher
- * 
+ *
  * Starts all background services for the transcription system
  * Designed to run independently from the unified API
  */
 
-import { TranscriptionQueue } from './queue.js';
+import { appConfig } from '../config/index.js';
+import { logger } from '../utils/logger.js';
 import { TranscriptionWorker } from '../workers/transcription-worker.js';
 import { FileWatcherService } from './file-watcher.js';
-import { logger } from '../utils/logger.js';
-import { appConfig } from '../config/index.js';
+import { TranscriptionQueue } from './queue.js';
 
 class BackgroundServicesManager {
   private queue: TranscriptionQueue;
@@ -59,7 +60,6 @@ class BackgroundServicesManager {
 
       // Set up graceful shutdown
       this.setupGracefulShutdown();
-
     } catch (error) {
       logger.error({ error }, '❌ Failed to start background services');
       await this.stop();
@@ -96,7 +96,6 @@ class BackgroundServicesManager {
 
       this.isRunning = false;
       logger.info('🎉 All background services stopped successfully');
-
     } catch (error) {
       logger.error({ error }, '❌ Error stopping background services');
       throw error;
@@ -128,7 +127,7 @@ class BackgroundServicesManager {
       fileWatcherActive: !!this.fileWatcher,
       uptime: process.uptime(),
       memoryUsage: process.memoryUsage(),
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 }
@@ -140,10 +139,10 @@ export async function getBackgroundServicesHealth() {
     services: {
       queue: 'active',
       workers: 'active',
-      fileWatcher: 'active'
+      fileWatcher: 'active',
     },
     uptime: process.uptime(),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   };
 }
 
@@ -152,11 +151,12 @@ if (import.meta.main) {
   const manager = new BackgroundServicesManager();
 
   // Start services
-  manager.start()
+  manager
+    .start()
     .then(() => {
       logger.info('🔮 Transcription Palantir background services are running');
       logger.info('📡 Press Ctrl+C to stop');
-      
+
       // Keep process alive
       setInterval(() => {
         const status = manager.getStatus();

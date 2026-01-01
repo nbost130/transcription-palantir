@@ -4,19 +4,15 @@
  * Real-time updates via WebSocket
  */
 
-import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import type { WebSocket } from '@fastify/websocket';
+import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { transcriptionQueue } from '../../services/queue.js';
 
 // =============================================================================
 // WEBSOCKET ROUTES
 // =============================================================================
 
-export async function websocketRoutes(
-  fastify: FastifyInstance,
-  opts: FastifyPluginOptions
-): Promise<void> {
-
+export async function websocketRoutes(fastify: FastifyInstance, _opts: FastifyPluginOptions): Promise<void> {
   // Track connected clients
   const clients = new Set<WebSocket>();
 
@@ -24,7 +20,7 @@ export async function websocketRoutes(
   // Queue Updates WebSocket
   // ---------------------------------------------------------------------------
 
-  fastify.get('/ws/queue', { websocket: true }, (connection, req) => {
+  fastify.get('/ws/queue', { websocket: true }, (connection, _req) => {
     const { socket } = connection;
 
     // Add client to set
@@ -81,47 +77,55 @@ export async function websocketRoutes(
         const job = await transcriptionQueue.getJob(jobId);
 
         if (!job) {
-          socket.send(JSON.stringify({
-            type: 'error',
-            message: 'Job not found',
-            timestamp: Date.now(),
-          }));
+          socket.send(
+            JSON.stringify({
+              type: 'error',
+              message: 'Job not found',
+              timestamp: Date.now(),
+            })
+          );
           return;
         }
 
-        socket.send(JSON.stringify({
-          type: 'job_update',
-          data: {
-            jobId: job.id,
-            name: job.data.fileName,
-            progress: job.progress || 0,
-            state: await job.getState(),
-            attemptsMade: job.attemptsMade,
-            processedOn: job.processedOn,
-            finishedOn: job.finishedOn,
-            failedReason: job.failedReason,
-          },
-          timestamp: Date.now(),
-        }));
+        socket.send(
+          JSON.stringify({
+            type: 'job_update',
+            data: {
+              jobId: job.id,
+              name: job.data.fileName,
+              progress: job.progress || 0,
+              state: await job.getState(),
+              attemptsMade: job.attemptsMade,
+              processedOn: job.processedOn,
+              finishedOn: job.finishedOn,
+              failedReason: job.failedReason,
+            },
+            timestamp: Date.now(),
+          })
+        );
 
         // Stop updates if job is finished
         if (job.finishedOn) {
           clearInterval(interval);
-          socket.send(JSON.stringify({
-            type: 'job_finished',
-            data: {
-              jobId: job.id,
-              success: !job.failedReason,
-            },
-            timestamp: Date.now(),
-          }));
+          socket.send(
+            JSON.stringify({
+              type: 'job_finished',
+              data: {
+                jobId: job.id,
+                success: !job.failedReason,
+              },
+              timestamp: Date.now(),
+            })
+          );
         }
       } catch (error) {
-        socket.send(JSON.stringify({
-          type: 'error',
-          message: (error as Error).message,
-          timestamp: Date.now(),
-        }));
+        socket.send(
+          JSON.stringify({
+            type: 'error',
+            message: (error as Error).message,
+            timestamp: Date.now(),
+          })
+        );
       }
     }, 1000);
 
@@ -141,7 +145,7 @@ export async function websocketRoutes(
   // System Events WebSocket
   // ---------------------------------------------------------------------------
 
-  fastify.get('/ws/events', { websocket: true }, (connection, req) => {
+  fastify.get('/ws/events', { websocket: true }, (connection, _req) => {
     const { socket } = connection;
 
     clients.add(socket);
@@ -150,11 +154,13 @@ export async function websocketRoutes(
 
     // Send system events
     const sendEvent = (event: any) => {
-      socket.send(JSON.stringify({
-        type: 'system_event',
-        event,
-        timestamp: Date.now(),
-      }));
+      socket.send(
+        JSON.stringify({
+          type: 'system_event',
+          event,
+          timestamp: Date.now(),
+        })
+      );
     };
 
     // Example: Send periodic system health
@@ -195,17 +201,21 @@ export async function websocketRoutes(
     try {
       const stats = await transcriptionQueue.getQueueStats();
 
-      socket.send(JSON.stringify({
-        type: 'queue_stats',
-        data: stats,
-        timestamp: Date.now(),
-      }));
+      socket.send(
+        JSON.stringify({
+          type: 'queue_stats',
+          data: stats,
+          timestamp: Date.now(),
+        })
+      );
     } catch (error) {
-      socket.send(JSON.stringify({
-        type: 'error',
-        message: (error as Error).message,
-        timestamp: Date.now(),
-      }));
+      socket.send(
+        JSON.stringify({
+          type: 'error',
+          message: (error as Error).message,
+          timestamp: Date.now(),
+        })
+      );
     }
   }
 
@@ -213,7 +223,8 @@ export async function websocketRoutes(
   function broadcast(message: any) {
     const data = JSON.stringify(message);
     for (const client of clients) {
-      if (client.readyState === 1) { // OPEN
+      if (client.readyState === 1) {
+        // OPEN
         client.send(data);
       }
     }

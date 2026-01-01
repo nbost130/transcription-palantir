@@ -6,12 +6,13 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
+    "test": "vitest",
+    "test:seq": "./scripts/test-seq.sh",
     "dev": "bun run --watch src/index.ts",
     "start": "bun run dist/index.js",
     "start:api": "bun run dist/api/server.js",
     "start:worker": "bun run dist/workers/transcription-worker.js",
     "start:watcher": "bun run dist/services/file-watcher.js",
-    "test": "vitest",
     "test:watch": "vitest --watch",
     "test:integration": "vitest tests/integration",
     "lint": "echo 'Linting disabled - using TypeScript compiler for type checking'",
@@ -25,7 +26,12 @@
     "docker:run": "docker-compose up -d",
     "docker:stop": "docker-compose down",
     "deploy:staging": "bun run scripts/deploy-staging.ts",
-    "deploy:production": "bun run scripts/deploy-production.ts"
+    "deploy:production": "bun run scripts/deploy-production.ts",
+    "biome:lint": "biome lint ./src ./tests",
+    "biome:format": "biome format --write ./src ./tests",
+    "biome:check": "biome check --write ./src ./tests",
+    "check:size": "node scripts/check-file-size.mjs",
+    "prepare": "husky || true"
   },
   "keywords": [
     "transcription",
@@ -59,12 +65,14 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.3.10",
     "@types/bun": "latest",
     "@types/node": "^20.8.10",
     "@types/node-cron": "^3.0.11",
     "@typescript-eslint/eslint-plugin": "^6.9.1",
     "@typescript-eslint/parser": "^6.9.1",
     "eslint": "^8.52.0",
+    "husky": "^9.1.7",
     "prettier": "^3.0.3",
     "typescript": "^5.2.2",
     "vitest": "^4.0.16"

@@ -5,14 +5,14 @@
  */
 
 import { z } from 'zod';
-import { HealthStatus } from './health-status.js';
+import type { HealthStatus } from './health-status.js';
 
 // =============================================================================
 // JOB TYPES
 // =============================================================================
 
+export { type ErrorCode, ErrorCodes, getErrorReason, TranscriptionError } from './error-codes.js';
 export { HealthStatus } from './health-status.js';
-export { ErrorCodes, TranscriptionError, getErrorReason, type ErrorCode } from './error-codes.js';
 
 export enum JobStatus {
   PENDING = 'pending',

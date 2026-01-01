@@ -1,6 +1,6 @@
 /**
  * 🔮 Transcription Palantir - Prometheus Metrics
- * 
+ *
  * Stub implementation for metrics - to be properly implemented later
  */
 

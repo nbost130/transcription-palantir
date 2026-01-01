@@ -1,15 +1,15 @@
 /**
  * 🔮 Enhanced Transcription Service
- * 
+ *
  * Integrates our BullMQ + Whisper system with existing unified API
  * Maintains backward compatibility with existing routes and dashboard
  */
 
-import { TranscriptionQueue } from '../services/queue.js';
-import { TranscriptionWorker } from '../workers/transcription-worker.js';
-import { logger } from '../utils/logger.js';
-import { JobStatus, type TranscriptionJob } from '../types/index.js';
 import type { Job } from 'bullmq';
+import { TranscriptionQueue } from '../services/queue.js';
+import { JobStatus } from '../types/index.js';
+import { logger } from '../utils/logger.js';
+import { TranscriptionWorker } from '../workers/transcription-worker.js';
 
 // Types matching existing API format
 interface ProjectsResponse {
@@ -91,13 +91,13 @@ export class EnhancedTranscriptionService {
 
       // Get all jobs from our queue
       const allJobs = await this.queue.getAllJobs();
-      
+
       // Group jobs by project (extract folder name from file path)
       const projectMap = new Map<string, ProjectInfo>();
 
       for (const job of allJobs) {
         const projectName = this.extractProjectName(job.data.fileName, job.data.inputPath);
-        
+
         if (!projectMap.has(projectName)) {
           projectMap.set(projectName, {
             name: projectName,
@@ -106,7 +106,7 @@ export class EnhancedTranscriptionService {
             processing: 0,
             pending: 0,
             failed: 0,
-            files: []
+            files: [],
           });
         }
 
@@ -136,7 +136,7 @@ export class EnhancedTranscriptionService {
 
       return {
         projects: Array.from(projectMap.values()),
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
     } catch (error) {
       logger.error({ error }, 'Failed to get transcription projects');
@@ -158,7 +158,7 @@ export class EnhancedTranscriptionService {
           status: 'error',
           message: 'Job not found',
           jobId,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         };
       }
 
@@ -171,7 +171,7 @@ export class EnhancedTranscriptionService {
         status: 'success',
         message: 'Job retried successfully',
         jobId,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
     } catch (error) {
       logger.error({ error, jobId }, 'Failed to retry job');
@@ -179,7 +179,7 @@ export class EnhancedTranscriptionService {
         status: 'error',
         message: `Failed to retry job: ${error}`,
         jobId,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
     }
   }
@@ -197,17 +197,15 @@ export class EnhancedTranscriptionService {
 
       // Get active jobs to properly distinguish processing vs pending
       const activeJobs = await this.queue.getJobs(JobStatus.PROCESSING, 0, 100);
-      const activeJobIds = new Set(activeJobs.map(job => job.id).filter((id): id is string => id !== undefined));
+      const activeJobIds = new Set(activeJobs.map((job) => job.id).filter((id): id is string => id !== undefined));
 
       // Map to dashboard format with proper status mapping
-      const dashboardJobs = allJobs.map(job => this.mapJobToDashboardFormat(job, activeJobIds));
+      const dashboardJobs = allJobs.map((job) => this.mapJobToDashboardFormat(job, activeJobIds));
 
       // Separate recent jobs and Orbis jobs
       const recentJobs = dashboardJobs.slice(0, 100); // Limit recent jobs
-      const orbisJobs = dashboardJobs.filter(job =>
-        job.filePath?.includes('Orbis') ||
-        job.fileName?.includes('LESSON') ||
-        job.fileName?.includes('Orbis')
+      const orbisJobs = dashboardJobs.filter(
+        (job) => job.filePath?.includes('Orbis') || job.fileName?.includes('LESSON') || job.fileName?.includes('Orbis')
       );
 
       return { recentJobs, orbisJobs };
@@ -225,7 +223,7 @@ export class EnhancedTranscriptionService {
     const elapsedSeconds = Math.floor((now - job.timestamp) / 1000);
 
     // Calculate processing time (if job has started)
-    let processingSeconds: number | undefined = undefined;
+    let processingSeconds: number | undefined;
     if (job.processedOn) {
       if (job.finishedOn) {
         // Job finished - calculate total processing time
@@ -248,7 +246,7 @@ export class EnhancedTranscriptionService {
       fileSize: job.data.fileSize,
       outputPath: job.data.outputPath,
       elapsedSeconds,
-      processingSeconds
+      processingSeconds,
     };
   }
 
@@ -303,14 +301,22 @@ export class EnhancedTranscriptionService {
         return pathParts[pathParts.length - 2] || 'Unknown Project';
       }
     }
-    
+
     // Fallback to extracting from filename
     const parts = fileName.split('_');
     return parts[0] || 'Unknown Project';
   }
 
   private mapJobStatusToApi(job: Job): string {
-    switch (job.opts?.attempts && job.attemptsMade >= job.opts.attempts ? 'failed' : job.finishedOn ? 'completed' : job.processedOn ? 'processing' : 'pending') {
+    switch (
+      job.opts?.attempts && job.attemptsMade >= job.opts.attempts
+        ? 'failed'
+        : job.finishedOn
+          ? 'completed'
+          : job.processedOn
+            ? 'processing'
+            : 'pending'
+    ) {
       case 'completed':
         return 'completed';
       case 'processing':
@@ -331,7 +337,7 @@ export class EnhancedTranscriptionService {
       progress: typeof job.progress === 'number' ? job.progress : undefined,
       startTime: job.processedOn ? new Date(job.processedOn).toISOString() : undefined,
       endTime: job.finishedOn ? new Date(job.finishedOn).toISOString() : undefined,
-      error: job.failedReason || undefined
+      error: job.failedReason || undefined,
     };
   }
 
@@ -345,7 +351,7 @@ export class EnhancedTranscriptionService {
       startTime: job.processedOn ? new Date(job.processedOn).toISOString() : undefined,
       endTime: job.finishedOn ? new Date(job.finishedOn).toISOString() : undefined,
       error: job.failedReason || undefined,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 }

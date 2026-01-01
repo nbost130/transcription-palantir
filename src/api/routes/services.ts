@@ -1,5 +1,5 @@
-import { FastifyInstance } from 'fastify';
 import axios from 'axios';
+import type { FastifyInstance } from 'fastify';
 
 interface ServiceDetails {
   name: string;
@@ -52,12 +52,7 @@ const DOCKER_PORT_MAPPING: Record<string, { externalPort: number; healthEndpoint
 };
 
 // Services to exclude from monitoring (internal Consul ports, etc.)
-const EXCLUDED_SERVICES = [
-  'consul-8301',
-  'consul-8302',
-  'consul-8600',
-  'consul',
-];
+const EXCLUDED_SERVICES = ['consul-8301', 'consul-8302', 'consul-8600', 'consul'];
 
 const CONSUL_URL = 'http://100.77.230.53:8500';
 const HOST_IP = '100.77.230.53';
@@ -98,6 +93,92 @@ function buildServiceUrl(service: ConsulService): { url: string; healthEndpoint:
   };
 }
 
+function getDisplayName(service: ConsulService): string {
+  return (
+    service.Meta?.displayName ||
+    service.Service.split('-')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ')
+  );
+}
+
+async function checkRedisHealth(
+  url: string,
+  service: ConsulService,
+  displayName: string,
+  lastChecked: string
+): Promise<ServiceDetails> {
+  try {
+    await axios.get(`${url}`, { timeout: 3000 });
+    // Redis won't respond to HTTP, so a connection error is expected
+    // If it somehow succeeds (e.g. not redis), mark as healthy
+    return {
+      name: displayName,
+      identifier: service.ID,
+      status: 'healthy',
+      url,
+      port: service.Port,
+      lastChecked,
+    };
+  } catch (error: any) {
+    // Connection refused = unhealthy, connection timeout = healthy (port open but not HTTP)
+    const isHealthy = error.code !== 'ECONNREFUSED';
+    return {
+      name: displayName,
+      identifier: service.ID,
+      status: isHealthy ? 'healthy' : 'unhealthy',
+      url,
+      port: service.Port,
+      ...(isHealthy ? {} : { error: 'Connection refused' }),
+      lastChecked,
+    };
+  }
+}
+
+function enrichServiceDetails(baseResult: ServiceDetails, serviceName: string, responseData: any): void {
+  if (serviceName === 'transcription-palantir' && responseData) {
+    if (typeof responseData.uptime === 'number') {
+      baseResult.uptime = responseData.uptime;
+    }
+    if (responseData.version) {
+      baseResult.version = responseData.version;
+    }
+    if (responseData.services || responseData.metrics) {
+      baseResult.details = {
+        services: responseData.services,
+        metrics: responseData.metrics,
+      };
+    }
+  } else if (serviceName === 'n8n' && responseData) {
+    baseResult.details = responseData;
+  }
+}
+
+async function checkHttpHealth(
+  url: string,
+  healthEndpoint: string,
+  service: ConsulService,
+  displayName: string,
+  lastChecked: string
+): Promise<ServiceDetails> {
+  const response = await axios.get(`${url}${healthEndpoint}`, {
+    timeout: 5000,
+    validateStatus: (status: number) => status < 500,
+  });
+
+  const baseResult: ServiceDetails = {
+    name: displayName,
+    identifier: service.ID,
+    status: response.status === 200 ? 'healthy' : 'unhealthy',
+    url,
+    port: service.Port,
+    lastChecked,
+  };
+
+  enrichServiceDetails(baseResult, service.Service, response.data);
+  return baseResult;
+}
+
 async function checkServiceHealth(service: ConsulService): Promise<ServiceDetails> {
   const lastChecked = new Date().toISOString();
   const { url, healthEndpoint } = buildServiceUrl(service);
@@ -107,30 +188,13 @@ async function checkServiceHealth(service: ConsulService): Promise<ServiceDetail
     return null as any; // Will be filtered out
   }
 
-  const displayName = service.Meta?.displayName ||
-    service.Service.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  const displayName = getDisplayName(service);
 
   try {
     // TCP check for Redis
     if (healthEndpoint === '') {
       if (service.Service === 'redis') {
-        // For Redis, just check if port is open
-        try {
-          await axios.get(`${url}`, { timeout: 3000 });
-          // Redis won't respond to HTTP, so a connection error is expected
-        } catch (error: any) {
-          // Connection refused = unhealthy, connection timeout = healthy (port open but not HTTP)
-          const isHealthy = error.code !== 'ECONNREFUSED';
-          return {
-            name: displayName,
-            identifier: service.ID,
-            status: isHealthy ? 'healthy' : 'unhealthy',
-            url,
-            port: service.Port,
-            ...(isHealthy ? {} : { error: 'Connection refused' }),
-            lastChecked,
-          };
-        }
+        return await checkRedisHealth(url, service, displayName, lastChecked);
       }
 
       return {
@@ -145,39 +209,7 @@ async function checkServiceHealth(service: ConsulService): Promise<ServiceDetail
     }
 
     // HTTP health check
-    const response = await axios.get(`${url}${healthEndpoint}`, {
-      timeout: 5000,
-      validateStatus: (status: number) => status < 500,
-    });
-
-    const baseResult: ServiceDetails = {
-      name: displayName,
-      identifier: service.ID,
-      status: response.status === 200 ? 'healthy' : 'unhealthy',
-      url,
-      port: service.Port,
-      lastChecked,
-    };
-
-    // Extract details from transcription-palantir
-    if (service.Service === 'transcription-palantir' && response.data) {
-      if (typeof response.data.uptime === 'number') {
-        baseResult.uptime = response.data.uptime;
-      }
-      if (response.data.version) {
-        baseResult.version = response.data.version;
-      }
-      if (response.data.services || response.data.metrics) {
-        baseResult.details = {
-          services: response.data.services,
-          metrics: response.data.metrics,
-        };
-      }
-    } else if (service.Service === 'n8n' && response.data) {
-      baseResult.details = response.data;
-    }
-
-    return baseResult;
+    return await checkHttpHealth(url, healthEndpoint, service, displayName, lastChecked);
   } catch (error: any) {
     return {
       name: displayName,
@@ -192,104 +224,108 @@ async function checkServiceHealth(service: ConsulService): Promise<ServiceDetail
 }
 
 export default async function servicesRoutes(fastify: FastifyInstance) {
-  fastify.get('/api/services/health', {
-    schema: {
-      description: 'Check health status of all Mithrandir services (Consul-integrated)',
-      tags: ['services'],
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: {
-              type: 'object',
-              properties: {
-                services: {
-                  type: 'array',
-                  items: {
+  fastify.get(
+    '/api/services/health',
+    {
+      schema: {
+        description: 'Check health status of all Mithrandir services (Consul-integrated)',
+        tags: ['services'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              data: {
+                type: 'object',
+                properties: {
+                  services: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        name: { type: 'string' },
+                        identifier: { type: 'string' },
+                        status: { type: 'string', enum: ['healthy', 'unhealthy'] },
+                        url: { type: 'string' },
+                        port: { type: 'number' },
+                        uptime: { type: 'number' },
+                        version: { type: 'string' },
+                        error: { type: 'string' },
+                        details: { type: 'object' },
+                        lastChecked: { type: 'string' },
+                      },
+                    },
+                  },
+                  summary: {
                     type: 'object',
                     properties: {
-                      name: { type: 'string' },
-                      identifier: { type: 'string' },
-                      status: { type: 'string', enum: ['healthy', 'unhealthy'] },
-                      url: { type: 'string' },
-                      port: { type: 'number' },
-                      uptime: { type: 'number' },
-                      version: { type: 'string' },
-                      error: { type: 'string' },
-                      details: { type: 'object' },
-                      lastChecked: { type: 'string' },
+                      total: { type: 'number' },
+                      healthy: { type: 'number' },
+                      unhealthy: { type: 'number' },
+                      healthPercentage: { type: 'number' },
                     },
                   },
                 },
-                summary: {
-                  type: 'object',
-                  properties: {
-                    total: { type: 'number' },
-                    healthy: { type: 'number' },
-                    unhealthy: { type: 'number' },
-                    healthPercentage: { type: 'number' },
-                  },
-                },
               },
+              timestamp: { type: 'string' },
             },
-            timestamp: { type: 'string' },
           },
         },
       },
     },
-  }, async (request, reply) => {
-    try {
-      // Fetch all services from Consul
-      const consulServices = await fetchConsulServices();
+    async (_request, reply) => {
+      try {
+        // Fetch all services from Consul
+        const consulServices = await fetchConsulServices();
 
-      // Filter out excluded services and those with no tags (internal services)
-      const relevantServices = consulServices.filter(service =>
-        !EXCLUDED_SERVICES.includes(service.Service) &&
-        !EXCLUDED_SERVICES.includes(service.ID) &&
-        service.Tags && service.Tags.length > 0
-      );
+        // Filter out excluded services and those with no tags (internal services)
+        const relevantServices = consulServices.filter(
+          (service) =>
+            !EXCLUDED_SERVICES.includes(service.Service) &&
+            !EXCLUDED_SERVICES.includes(service.ID) &&
+            service.Tags &&
+            service.Tags.length > 0
+        );
 
-      // Check health of all services in parallel
-      const serviceChecks = await Promise.all(
-        relevantServices.map(service => checkServiceHealth(service))
-      );
+        // Check health of all services in parallel
+        const serviceChecks = await Promise.all(relevantServices.map((service) => checkServiceHealth(service)));
 
-      // Filter out null results (unmapped Docker services)
-      const validServices = serviceChecks.filter(s => s !== null);
+        // Filter out null results (unmapped Docker services)
+        const validServices = serviceChecks.filter((s) => s !== null);
 
-      // Calculate summary
-      const total = validServices.length;
-      const healthy = validServices.filter(s => s.status === 'healthy').length;
-      const unhealthy = total - healthy;
-      const healthPercentage = total > 0 ? Math.round((healthy / total) * 100) : 0;
+        // Calculate summary
+        const total = validServices.length;
+        const healthy = validServices.filter((s) => s.status === 'healthy').length;
+        const unhealthy = total - healthy;
+        const healthPercentage = total > 0 ? Math.round((healthy / total) * 100) : 0;
 
-      const healthData: ServicesHealthResponse = {
-        services: validServices,
-        summary: {
-          total,
-          healthy,
-          unhealthy,
-          healthPercentage,
-        },
-      };
+        const healthData: ServicesHealthResponse = {
+          services: validServices,
+          summary: {
+            total,
+            healthy,
+            unhealthy,
+            healthPercentage,
+          },
+        };
 
-      const response: ApiResponse<ServicesHealthResponse> = {
-        success: true,
-        data: healthData,
-        timestamp: new Date().toISOString(),
-      };
+        const response: ApiResponse<ServicesHealthResponse> = {
+          success: true,
+          data: healthData,
+          timestamp: new Date().toISOString(),
+        };
 
-      return response;
-    } catch (error: any) {
-      fastify.log.error({ error }, 'Failed to fetch services from Consul');
+        return response;
+      } catch (error: any) {
+        fastify.log.error({ error }, 'Failed to fetch services from Consul');
 
-      // Return error response
-      return reply.code(503).send({
-        success: false,
-        error: `Failed to fetch services: ${error.message}`,
-        timestamp: new Date().toISOString(),
-      });
+        // Return error response
+        return reply.code(503).send({
+          success: false,
+          error: `Failed to fetch services: ${error.message}`,
+          timestamp: new Date().toISOString(),
+        });
+      }
     }
-  });
+  );
 }

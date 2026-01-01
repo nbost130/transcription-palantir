@@ -212,10 +212,14 @@ export function getWhisperCommand(inputFile: string, outputDir: string): string[
     const args = [
       binaryPath,
       inputFile,
-      '--model', model,
-      '--output_format', 'txt',
-      '--output_dir', outputDir,
-      '--task', task,
+      '--model',
+      model,
+      '--output_format',
+      'txt',
+      '--output_dir',
+      outputDir,
+      '--task',
+      task,
     ];
 
     // Only add language if not auto-detection
