@@ -116,6 +116,7 @@ export interface SystemHealth {
   version: string;
   services: ServiceHealth[];
   metrics: SystemMetrics;
+  paths?: DirectoryHealth[];
 }
 
 export interface ServiceHealth {
@@ -125,6 +126,14 @@ export interface ServiceHealth {
   responseTime?: number;
   error?: string;
   metadata?: Record<string, any>;
+}
+
+export interface DirectoryHealth {
+  name: string;
+  path: string;
+  accessible: boolean;
+  lastChecked: string;
+  note?: string;
 }
 
 export interface SystemMetrics {

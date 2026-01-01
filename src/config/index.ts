@@ -4,6 +4,8 @@
  * Centralized configuration with environment-specific overrides
  */
 
+import { accessSync, existsSync, constants as fsConstants, mkdirSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import { config } from 'dotenv';
 import { z } from 'zod';
 import type { AppConfig } from '../types/index.js';
@@ -148,28 +150,70 @@ function createConfig(): AppConfig {
 // CONFIGURATION VALIDATION
 // =============================================================================
 
+type DirectoryRule = {
+  path: string;
+  label: string;
+  requireExisting?: boolean;
+};
+
+function validateDirectories(config: AppConfig, errors: string[]): void {
+  const directoryRules: DirectoryRule[] = [
+    { path: config.processing.watchDirectory, label: 'WATCH_DIRECTORY', requireExisting: true },
+    { path: config.processing.outputDirectory, label: 'OUTPUT_DIRECTORY' },
+    { path: config.processing.completedDirectory, label: 'COMPLETED_DIRECTORY' },
+    { path: config.processing.failedDirectory, label: 'FAILED_DIRECTORY' },
+  ];
+
+  for (const rule of directoryRules) {
+    const { path, label, requireExisting } = rule;
+
+    if (!path) {
+      errors.push(`${label} is not set`);
+      continue;
+    }
+
+    if (!isAbsolute(path)) {
+      errors.push(`${label} must be an absolute path, received: ${path}`);
+      continue;
+    }
+
+    if (process.platform === 'linux' && path.startsWith('/Users')) {
+      errors.push(`${label} uses macOS path syntax on Linux: ${path}`);
+      continue;
+    }
+
+    if (process.platform === 'darwin' && path.startsWith('/mnt/')) {
+      errors.push(`${label} uses Linux path syntax on macOS: ${path}`);
+      continue;
+    }
+
+    if (!existsSync(path)) {
+      if (requireExisting) {
+        errors.push(`${label} does not exist or is not mounted: ${path}`);
+        continue;
+      }
+
+      try {
+        mkdirSync(path, { recursive: true });
+      } catch (error) {
+        errors.push(`Failed to create ${label} (${path}): ${(error as Error).message}`);
+        continue;
+      }
+    }
+
+    try {
+      accessSync(path, fsConstants.R_OK | fsConstants.W_OK);
+    } catch (error) {
+      errors.push(`${label} is not readable/writable (${path}): ${(error as Error).message}`);
+    }
+  }
+}
+
 function validateConfig(config: AppConfig): void {
   const errors: string[] = [];
 
-  // Validate directories exist or can be created
-  const directories = [
-    config.processing.watchDirectory,
-    config.processing.outputDirectory,
-    config.processing.completedDirectory,
-    config.processing.failedDirectory,
-  ];
+  validateDirectories(config, errors);
 
-  // Check for wrong OS paths (prevents macOS paths on Linux and vice versa)
-  for (const dir of directories) {
-    if (process.platform === 'linux' && dir.startsWith('/Users')) {
-      errors.push(`Invalid macOS path on Linux: ${dir}`);
-    }
-    if (process.platform === 'darwin' && dir.startsWith('/mnt')) {
-      errors.push(`Invalid Linux path on macOS: ${dir}`);
-    }
-  }
-
-  // Additional validation logic can be added here
   if (config.processing.maxWorkers < config.processing.minWorkers) {
     errors.push('MAX_WORKERS must be greater than or equal to MIN_WORKERS');
   }
