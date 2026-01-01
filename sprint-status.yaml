@@ -65,6 +65,7 @@ development_status:
   epic-3: in-progress
   3-1-implement-accurate-pagination-with-getjobcounts: done
   3-2-implement-dynamic-healthstatus-computation: done
+  3-3-remove-delayed-jobs-and-fix-prioritized-handling: backlog
   epic-3-retrospective: optional
 
   # Epic 4: API Contracts & Integration
