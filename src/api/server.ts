@@ -117,7 +117,7 @@ export class ApiServer {
     fastify.register(rateLimit, {
       max: appConfig.api.rateLimitMax,
       timeWindow: appConfig.api.rateLimitWindow,
-      errorResponseBuilder: (req, context) => {
+      errorResponseBuilder: (_req, context) => {
         return {
           success: false,
           error: 'Rate limit exceeded',
@@ -215,7 +215,7 @@ export class ApiServer {
     const prefix = appConfig.api.prefix;
 
     // Root endpoint
-    fastify.get('/', async (request, reply) => {
+    fastify.get('/', async (_request, _reply) => {
       return {
         name: 'Transcription Palantir API',
         version: '1.0.0',

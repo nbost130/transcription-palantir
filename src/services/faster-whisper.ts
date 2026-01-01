@@ -4,10 +4,9 @@
  * Python-based faster-whisper integration for high-performance transcription
  */
 
-import { spawn } from 'child_process';
-import { constants } from 'fs';
-import { access, mkdir, readFile, writeFile } from 'fs/promises';
-import { basename, dirname, extname, join } from 'path';
+import { spawn } from 'node:child_process';
+import { mkdir, readFile } from 'node:fs/promises';
+import { basename, extname, join } from 'node:path';
 import { appConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
@@ -161,7 +160,7 @@ export class FasterWhisperService {
       });
 
       let stderr = '';
-      let stdout = '';
+      let _stdout = '';
       let isResolved = false;
 
       // Log start without timeout - file growth monitor will detect stuck processes
@@ -176,7 +175,7 @@ export class FasterWhisperService {
       });
 
       child.stdout?.on('data', (data) => {
-        stdout += data.toString();
+        _stdout += data.toString();
       });
 
       child.on('close', (code) => {

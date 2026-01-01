@@ -5,8 +5,8 @@
  * by detecting existing processes and port conflicts before startup.
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import { appConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
@@ -120,8 +120,8 @@ export class ProcessGuardService {
       const cmdParts = parts.slice(2);
 
       return {
-        pid: parseInt(pidStr || '0'),
-        ppid: parseInt(ppidStr || '0'),
+        pid: parseInt(pidStr || '0', 10),
+        ppid: parseInt(ppidStr || '0', 10),
         cmd: cmdParts.join(' '),
       };
     } catch (error) {
@@ -150,7 +150,7 @@ export class ProcessGuardService {
         const pidStr = parts[1];
         if (!pidStr) continue;
 
-        const pid = parseInt(pidStr);
+        const pid = parseInt(pidStr, 10);
 
         // Skip current process
         if (pid === currentPid) {
@@ -163,7 +163,7 @@ export class ProcessGuardService {
         try {
           const { stdout: ppidOutput } = await execAsync(`ps -p ${pid} -o ppid=`);
           const ppidStr = ppidOutput.trim();
-          const ppid = parseInt(ppidStr || '0');
+          const ppid = parseInt(ppidStr || '0', 10);
 
           processes.push({ pid, ppid, cmd });
         } catch {}

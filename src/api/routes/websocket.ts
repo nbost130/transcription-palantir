@@ -12,7 +12,7 @@ import { transcriptionQueue } from '../../services/queue.js';
 // WEBSOCKET ROUTES
 // =============================================================================
 
-export async function websocketRoutes(fastify: FastifyInstance, opts: FastifyPluginOptions): Promise<void> {
+export async function websocketRoutes(fastify: FastifyInstance, _opts: FastifyPluginOptions): Promise<void> {
   // Track connected clients
   const clients = new Set<WebSocket>();
 
@@ -20,7 +20,7 @@ export async function websocketRoutes(fastify: FastifyInstance, opts: FastifyPlu
   // Queue Updates WebSocket
   // ---------------------------------------------------------------------------
 
-  fastify.get('/ws/queue', { websocket: true }, (connection, req) => {
+  fastify.get('/ws/queue', { websocket: true }, (connection, _req) => {
     const { socket } = connection;
 
     // Add client to set
@@ -145,7 +145,7 @@ export async function websocketRoutes(fastify: FastifyInstance, opts: FastifyPlu
   // System Events WebSocket
   // ---------------------------------------------------------------------------
 
-  fastify.get('/ws/events', { websocket: true }, (connection, req) => {
+  fastify.get('/ws/events', { websocket: true }, (connection, _req) => {
     const { socket } = connection;
 
     clients.add(socket);

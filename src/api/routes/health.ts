@@ -4,8 +4,8 @@
  * System health and readiness endpoints
  */
 
+import { access, constants } from 'node:fs/promises';
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
-import { access, constants } from 'fs/promises';
 import { appConfig } from '../../config/index.js';
 import { fileWatcher } from '../../services/file-watcher.js';
 import { transcriptionQueue } from '../../services/queue.js';
@@ -28,7 +28,7 @@ async function checkDirectoryAccess(dirPath: string): Promise<boolean> {
 // HEALTH ROUTES
 // =============================================================================
 
-export async function healthRoutes(fastify: FastifyInstance, opts: FastifyPluginOptions): Promise<void> {
+export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPluginOptions): Promise<void> {
   // ---------------------------------------------------------------------------
   // Liveness Probe
   // ---------------------------------------------------------------------------
@@ -51,7 +51,7 @@ export async function healthRoutes(fastify: FastifyInstance, opts: FastifyPlugin
         },
       },
     },
-    async (request, reply) => {
+    async (_request, _reply) => {
       return {
         status: 'ok',
         timestamp: new Date().toISOString(),
@@ -82,7 +82,7 @@ export async function healthRoutes(fastify: FastifyInstance, opts: FastifyPlugin
         },
       },
     },
-    async (request, reply) => {
+    async (_request, reply) => {
       const services: ServiceHealth[] = [];
 
       // Check Queue Service
@@ -162,7 +162,7 @@ export async function healthRoutes(fastify: FastifyInstance, opts: FastifyPlugin
         },
       },
     },
-    async (request, reply) => {
+    async (_request, _reply) => {
       const services: ServiceHealth[] = [];
 
       // Check Queue Service
@@ -233,7 +233,7 @@ export async function healthRoutes(fastify: FastifyInstance, opts: FastifyPlugin
         if (transcriptionQueue.isReady) {
           queueStats = await transcriptionQueue.getQueueStats();
         }
-      } catch (error) {
+      } catch (_error) {
         // Stats unavailable
       }
 
@@ -299,7 +299,7 @@ export async function healthRoutes(fastify: FastifyInstance, opts: FastifyPlugin
         },
       },
     },
-    async (request, reply) => {
+    async (_request, _reply) => {
       const initialized = transcriptionQueue.isReady;
 
       return {

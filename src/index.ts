@@ -8,7 +8,6 @@ import { apiServer } from './api/server.js';
 import { appConfig } from './config/index.js';
 import { fileTracker } from './services/file-tracker.js';
 import { fileWatcher } from './services/file-watcher.js';
-import { processGuard } from './services/process-guard.js';
 import { transcriptionQueue } from './services/queue.js';
 import { logFatalError, logger } from './utils/logger.js';
 import { transcriptionWorker } from './workers/transcription-worker.js';

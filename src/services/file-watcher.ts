@@ -4,11 +4,11 @@
  * Monitors directories for new audio files and automatically creates transcription jobs
  */
 
+import { randomUUID } from 'node:crypto';
+import { constants } from 'node:fs';
+import { access, readdir, stat } from 'node:fs/promises';
+import { basename, extname, join } from 'node:path';
 import chokidar from 'chokidar';
-import { randomUUID } from 'crypto';
-import { constants } from 'fs';
-import { access, readdir, stat } from 'fs/promises';
-import { basename, extname, join } from 'path';
 import { appConfig } from '../config/index.js';
 import { JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js';
 import { getMimeType } from '../utils/file.js';

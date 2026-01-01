@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
 import {
   createTimer,
   logApiRequest,
@@ -19,7 +19,7 @@ const mockInfo = mock(() => {});
 const mockError = mock(() => {});
 const mockDebug = mock(() => {});
 const mockFatal = mock(() => {});
-const mockChild = mock(() => ({
+const _mockChild = mock(() => ({
   info: mockInfo,
   error: mockError,
   debug: mockDebug,

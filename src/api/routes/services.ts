@@ -93,6 +93,92 @@ function buildServiceUrl(service: ConsulService): { url: string; healthEndpoint:
   };
 }
 
+function getDisplayName(service: ConsulService): string {
+  return (
+    service.Meta?.displayName ||
+    service.Service.split('-')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ')
+  );
+}
+
+async function checkRedisHealth(
+  url: string,
+  service: ConsulService,
+  displayName: string,
+  lastChecked: string
+): Promise<ServiceDetails> {
+  try {
+    await axios.get(`${url}`, { timeout: 3000 });
+    // Redis won't respond to HTTP, so a connection error is expected
+    // If it somehow succeeds (e.g. not redis), mark as healthy
+    return {
+      name: displayName,
+      identifier: service.ID,
+      status: 'healthy',
+      url,
+      port: service.Port,
+      lastChecked,
+    };
+  } catch (error: any) {
+    // Connection refused = unhealthy, connection timeout = healthy (port open but not HTTP)
+    const isHealthy = error.code !== 'ECONNREFUSED';
+    return {
+      name: displayName,
+      identifier: service.ID,
+      status: isHealthy ? 'healthy' : 'unhealthy',
+      url,
+      port: service.Port,
+      ...(isHealthy ? {} : { error: 'Connection refused' }),
+      lastChecked,
+    };
+  }
+}
+
+function enrichServiceDetails(baseResult: ServiceDetails, serviceName: string, responseData: any): void {
+  if (serviceName === 'transcription-palantir' && responseData) {
+    if (typeof responseData.uptime === 'number') {
+      baseResult.uptime = responseData.uptime;
+    }
+    if (responseData.version) {
+      baseResult.version = responseData.version;
+    }
+    if (responseData.services || responseData.metrics) {
+      baseResult.details = {
+        services: responseData.services,
+        metrics: responseData.metrics,
+      };
+    }
+  } else if (serviceName === 'n8n' && responseData) {
+    baseResult.details = responseData;
+  }
+}
+
+async function checkHttpHealth(
+  url: string,
+  healthEndpoint: string,
+  service: ConsulService,
+  displayName: string,
+  lastChecked: string
+): Promise<ServiceDetails> {
+  const response = await axios.get(`${url}${healthEndpoint}`, {
+    timeout: 5000,
+    validateStatus: (status: number) => status < 500,
+  });
+
+  const baseResult: ServiceDetails = {
+    name: displayName,
+    identifier: service.ID,
+    status: response.status === 200 ? 'healthy' : 'unhealthy',
+    url,
+    port: service.Port,
+    lastChecked,
+  };
+
+  enrichServiceDetails(baseResult, service.Service, response.data);
+  return baseResult;
+}
+
 async function checkServiceHealth(service: ConsulService): Promise<ServiceDetails> {
   const lastChecked = new Date().toISOString();
   const { url, healthEndpoint } = buildServiceUrl(service);
@@ -102,33 +188,13 @@ async function checkServiceHealth(service: ConsulService): Promise<ServiceDetail
     return null as any; // Will be filtered out
   }
 
-  const displayName =
-    service.Meta?.displayName ||
-    service.Service.split('-')
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-      .join(' ');
+  const displayName = getDisplayName(service);
 
   try {
     // TCP check for Redis
     if (healthEndpoint === '') {
       if (service.Service === 'redis') {
-        // For Redis, just check if port is open
-        try {
-          await axios.get(`${url}`, { timeout: 3000 });
-          // Redis won't respond to HTTP, so a connection error is expected
-        } catch (error: any) {
-          // Connection refused = unhealthy, connection timeout = healthy (port open but not HTTP)
-          const isHealthy = error.code !== 'ECONNREFUSED';
-          return {
-            name: displayName,
-            identifier: service.ID,
-            status: isHealthy ? 'healthy' : 'unhealthy',
-            url,
-            port: service.Port,
-            ...(isHealthy ? {} : { error: 'Connection refused' }),
-            lastChecked,
-          };
-        }
+        return await checkRedisHealth(url, service, displayName, lastChecked);
       }
 
       return {
@@ -143,39 +209,7 @@ async function checkServiceHealth(service: ConsulService): Promise<ServiceDetail
     }
 
     // HTTP health check
-    const response = await axios.get(`${url}${healthEndpoint}`, {
-      timeout: 5000,
-      validateStatus: (status: number) => status < 500,
-    });
-
-    const baseResult: ServiceDetails = {
-      name: displayName,
-      identifier: service.ID,
-      status: response.status === 200 ? 'healthy' : 'unhealthy',
-      url,
-      port: service.Port,
-      lastChecked,
-    };
-
-    // Extract details from transcription-palantir
-    if (service.Service === 'transcription-palantir' && response.data) {
-      if (typeof response.data.uptime === 'number') {
-        baseResult.uptime = response.data.uptime;
-      }
-      if (response.data.version) {
-        baseResult.version = response.data.version;
-      }
-      if (response.data.services || response.data.metrics) {
-        baseResult.details = {
-          services: response.data.services,
-          metrics: response.data.metrics,
-        };
-      }
-    } else if (service.Service === 'n8n' && response.data) {
-      baseResult.details = response.data;
-    }
-
-    return baseResult;
+    return await checkHttpHealth(url, healthEndpoint, service, displayName, lastChecked);
   } catch (error: any) {
     return {
       name: displayName,
@@ -239,7 +273,7 @@ export default async function servicesRoutes(fastify: FastifyInstance) {
         },
       },
     },
-    async (request, reply) => {
+    async (_request, reply) => {
       try {
         // Fetch all services from Consul
         const consulServices = await fetchConsulServices();

@@ -1,5 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
-import { JobPriority } from '../types/index';
+import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 
 // Mock dependencies
 const mockLogger = {
@@ -43,12 +42,12 @@ const mockQueueInstance = {
   waitUntilReady: mock(async () => {}),
 };
 
-const mockWorkerInstance = {
+const _mockWorkerInstance = {
   on: mock(() => {}),
   close: mock(async () => {}),
 };
 
-const mockQueueEventsInstance = {
+const _mockQueueEventsInstance = {
   on: mock(() => {}),
   close: mock(async () => {}),
   waitUntilReady: mock(async () => {}),

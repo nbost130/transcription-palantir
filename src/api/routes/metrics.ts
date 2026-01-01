@@ -18,7 +18,7 @@ import { transcriptionQueue } from '../../services/queue.js';
 // METRICS ROUTES
 // =============================================================================
 
-export async function metricsRoutes(fastify: FastifyInstance, opts: FastifyPluginOptions): Promise<void> {
+export async function metricsRoutes(fastify: FastifyInstance, _opts: FastifyPluginOptions): Promise<void> {
   // ---------------------------------------------------------------------------
   // Prometheus Metrics (Text Format)
   // ---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ export async function metricsRoutes(fastify: FastifyInstance, opts: FastifyPlugi
         },
       },
     },
-    async (request, reply) => {
+    async (_request, reply) => {
       // Update queue metrics before returning
       const stats = await transcriptionQueue.getQueueStats();
       queueSize.set({ status: 'waiting' }, stats.waiting);
@@ -75,7 +75,7 @@ export async function metricsRoutes(fastify: FastifyInstance, opts: FastifyPlugi
         },
       },
     },
-    async (request, reply) => {
+    async (_request, _reply) => {
       // Update metrics
       const stats = await transcriptionQueue.getQueueStats();
       queueSize.set({ status: 'waiting' }, stats.waiting);

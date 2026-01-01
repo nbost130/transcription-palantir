@@ -47,7 +47,7 @@ export async function systemRoutes(fastify: FastifyInstance): Promise<void> {
         },
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (_request: FastifyRequest, reply: FastifyReply) => {
       try {
         const whisperInfo = await whisperService.getSystemInfo();
 
@@ -119,7 +119,7 @@ export async function systemRoutes(fastify: FastifyInstance): Promise<void> {
         },
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (_request: FastifyRequest, reply: FastifyReply) => {
       try {
         const whisperInfo = await whisperService.getSystemInfo();
 
@@ -242,7 +242,7 @@ export async function systemRoutes(fastify: FastifyInstance): Promise<void> {
         },
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (_request: FastifyRequest, _reply: FastifyReply) => {
       return {
         success: true,
         data: {

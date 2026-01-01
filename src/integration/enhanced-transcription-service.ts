@@ -7,7 +7,7 @@
 
 import type { Job } from 'bullmq';
 import { TranscriptionQueue } from '../services/queue.js';
-import { JobStatus, type TranscriptionJob } from '../types/index.js';
+import { JobStatus } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { TranscriptionWorker } from '../workers/transcription-worker.js';
 

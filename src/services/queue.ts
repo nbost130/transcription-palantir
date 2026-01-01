@@ -4,7 +4,7 @@
  * BullMQ-based job queue management for transcription tasks
  */
 
-import { type Job, Queue, QueueEvents, Worker } from 'bullmq';
+import { type Job, Queue, QueueEvents } from 'bullmq';
 import { Redis } from 'ioredis';
 import { appConfig, getRedisUrl } from '../config/index.js';
 import { JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js';
@@ -262,7 +262,7 @@ export class TranscriptionQueue {
     if (status === JobStatus.PENDING) {
       // For pending jobs, we need to combine delayed and waiting queues
       // but respect the pagination limits
-      const limit = end - start + 1;
+      const _limit = end - start + 1;
 
       // Get jobs from both queues with generous limits
       const [delayedJobs, waitingJobs] = await Promise.all([

@@ -13,7 +13,7 @@ import { type ApiResponse, JobStatus } from '../../types/index.js';
 // MONITORING ROUTES
 // =============================================================================
 
-export async function monitorRoutes(fastify: FastifyInstance, opts: FastifyPluginOptions): Promise<void> {
+export async function monitorRoutes(fastify: FastifyInstance, _opts: FastifyPluginOptions): Promise<void> {
   // ---------------------------------------------------------------------------
   // Queue Dashboard Data
   // ---------------------------------------------------------------------------
@@ -36,7 +36,7 @@ export async function monitorRoutes(fastify: FastifyInstance, opts: FastifyPlugi
         },
       },
     },
-    async (request, reply) => {
+    async (request, _reply) => {
       const stats = await transcriptionQueue.getQueueStats();
 
       // Get recent jobs from each status
@@ -112,7 +112,7 @@ export async function monitorRoutes(fastify: FastifyInstance, opts: FastifyPlugi
         },
       },
     },
-    async (request, reply) => {
+    async (request, _reply) => {
       const stats = await transcriptionQueue.getQueueStats();
 
       const response: ApiResponse = {
@@ -167,7 +167,7 @@ export async function monitorRoutes(fastify: FastifyInstance, opts: FastifyPlugi
         },
       },
     },
-    async (request, reply) => {
+    async (request, _reply) => {
       const stats = await transcriptionQueue.getQueueStats();
       const memUsage = process.memoryUsage();
 
@@ -205,10 +205,10 @@ export async function monitorRoutes(fastify: FastifyInstance, opts: FastifyPlugi
       // Add alerts for issues
       const alerts: string[] = [];
       if (stats.waiting > 100) {
-        alerts.push('High queue depth: ' + stats.waiting + ' jobs waiting');
+        alerts.push(`High queue depth: ${stats.waiting} jobs waiting`);
       }
       if (stats.failed > 10) {
-        alerts.push('Multiple failed jobs: ' + stats.failed + ' failures');
+        alerts.push(`Multiple failed jobs: ${stats.failed} failures`);
       }
       if (stats.active === 0 && stats.waiting > 0) {
         alerts.push('Workers idle with pending jobs');
@@ -248,7 +248,7 @@ export async function monitorRoutes(fastify: FastifyInstance, opts: FastifyPlugi
         },
       },
     },
-    async (request, reply) => {
+    async (request, _reply) => {
       const { hours = 1 } = request.query as { hours?: number };
 
       // Get completed and failed jobs

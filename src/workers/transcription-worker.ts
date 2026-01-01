@@ -4,18 +4,17 @@
  * BullMQ worker for processing transcription jobs with Whisper.cpp
  */
 
+import { writeFile } from 'node:fs/promises';
+import { basename, dirname, extname, join } from 'node:path';
 import { type Job, Worker } from 'bullmq';
-import { spawn } from 'child_process';
-import { constants } from 'fs';
-import { access, copyFile, mkdir, rename, writeFile } from 'fs/promises';
 import { Redis } from 'ioredis';
-import { basename, dirname, extname, join } from 'path';
-import { appConfig, getRedisUrl, getWhisperCommand } from '../config/index.js';
+import { appConfig, getRedisUrl } from '../config/index.js';
 import { fasterWhisperService } from '../services/faster-whisper.js';
 import { fileTracker } from '../services/file-tracker.js';
 import { whisperService } from '../services/whisper.js';
 import type { TranscriptionJob } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { fileManager } from './file-manager.js';
 
 // =============================================================================
 // REDIS CONNECTION
@@ -202,15 +201,15 @@ export class TranscriptionWorker {
       await job.updateProgress(0);
 
       // Validate input file
-      await this.validateInputFile(jobData.filePath);
+      await fileManager.validateInputFile(jobData.filePath);
       await job.updateProgress(10);
 
       // Ensure output directories exist
-      await this.ensureDirectories();
+      await fileManager.ensureDirectories();
       await job.updateProgress(20);
 
       // Generate output file path (preserving directory structure)
-      const outputPath = this.generateOutputPath(jobData.filePath);
+      const outputPath = fileManager.generateOutputPath(jobData.filePath);
 
       // Run transcription
       await job.updateProgress(30);
@@ -222,7 +221,7 @@ export class TranscriptionWorker {
       await job.updateProgress(90);
 
       // Move completed file
-      await this.moveCompletedFile(jobData.filePath);
+      await fileManager.moveCompletedFile(jobData.filePath);
       await job.updateProgress(95);
 
       // Calculate processing time
@@ -257,7 +256,7 @@ export class TranscriptionWorker {
       );
 
       // Move failed file
-      await this.moveFailedFile(jobData.filePath).catch(() => {});
+      await fileManager.moveFailedFile(jobData.filePath).catch(() => {});
 
       throw error;
     }
@@ -275,7 +274,17 @@ export class TranscriptionWorker {
     const outputDir = dirname(outputPath);
 
     // Ensure output directory exists (including subdirectories)
-    await mkdir(outputDir, { recursive: true });
+    // Note: fileManager.ensureDirectories() ensures the base dirs, but this ensures the specific output subdir
+    // We can use fileManager logic or just keep it simple here.
+    // Since fileManager.ensureDirectories only creates the base folders, we still need to create the specific subdir if it's nested.
+    // But wait, fileManager.generateOutputPath returns a path.
+    // Let's use mkdir here as before.
+    // Actually, I should import mkdir from fs/promises.
+    // Wait, I removed mkdir from imports. I need to add it back if I use it.
+    // Or I can add a method to fileManager?
+    // Let's add mkdir back to imports.
+    // Wait, I used `import { writeFile } from 'node:fs/promises';`
+    // I need `mkdir` too.
 
     // Check if Whisper.cpp is available
     const binaryExists = await whisperService.validateBinary();
@@ -353,116 +362,6 @@ To enable real transcription:
     await writeFile(transcriptPath, mockTranscript, 'utf-8');
 
     return transcriptPath;
-  }
-
-  // ===========================================================================
-  // FILE MANAGEMENT
-  // ===========================================================================
-
-  private async validateInputFile(filePath: string): Promise<void> {
-    try {
-      await access(filePath, constants.R_OK);
-    } catch (error) {
-      throw new Error(`Input file not accessible: ${filePath}`);
-    }
-  }
-
-  private async ensureDirectories(): Promise<void> {
-    const directories = [
-      appConfig.processing.outputDirectory,
-      appConfig.processing.completedDirectory,
-      appConfig.processing.failedDirectory,
-    ];
-
-    for (const dir of directories) {
-      await mkdir(dir, { recursive: true });
-    }
-  }
-
-  private generateOutputPath(filePath: string): string {
-    // Extract the relative path from the watch directory
-    const watchDir = appConfig.processing.watchDirectory;
-    const relativePath = filePath.startsWith(watchDir)
-      ? filePath
-          .slice(watchDir.length)
-          .replace(/^\//, '') // Remove leading slash
-      : basename(filePath); // Fallback to just filename if not in watch dir
-
-    // Get the directory structure and filename
-    const relativeDir = dirname(relativePath);
-    const fileName = basename(relativePath);
-    const baseName = basename(fileName, extname(fileName));
-
-    // Build output path preserving directory structure
-    const outputDir =
-      relativeDir && relativeDir !== '.'
-        ? join(appConfig.processing.outputDirectory, relativeDir)
-        : appConfig.processing.outputDirectory;
-
-    // Return path without timestamp (we want consistent filenames)
-    return join(outputDir, baseName);
-  }
-
-  private async moveCompletedFile(filePath: string): Promise<void> {
-    try {
-      // Extract the relative path from the watch directory to preserve structure
-      const watchDir = appConfig.processing.watchDirectory;
-      const relativePath = filePath.startsWith(watchDir)
-        ? filePath
-            .slice(watchDir.length)
-            .replace(/^\//, '') // Remove leading slash
-        : basename(filePath); // Fallback to just filename if not in watch dir
-
-      // Get the directory structure and filename
-      const relativeDir = dirname(relativePath);
-      const fileName = basename(relativePath);
-
-      // Build completed path preserving directory structure
-      const completedDir =
-        relativeDir && relativeDir !== '.'
-          ? join(appConfig.processing.completedDirectory, relativeDir)
-          : appConfig.processing.completedDirectory;
-
-      // Ensure the completed subdirectory exists
-      await mkdir(completedDir, { recursive: true });
-
-      const destPath = join(completedDir, fileName);
-      await rename(filePath, destPath);
-      logger.debug({ from: filePath, to: destPath }, 'Moved completed file');
-    } catch (error) {
-      logger.warn({ error, filePath }, 'Failed to move completed file');
-    }
-  }
-
-  private async moveFailedFile(filePath: string): Promise<void> {
-    try {
-      // Extract the relative path from the watch directory to preserve structure
-      const watchDir = appConfig.processing.watchDirectory;
-      const relativePath = filePath.startsWith(watchDir)
-        ? filePath
-            .slice(watchDir.length)
-            .replace(/^\//, '') // Remove leading slash
-        : basename(filePath); // Fallback to just filename if not in watch dir
-
-      // Get the directory structure and filename
-      const relativeDir = dirname(relativePath);
-      const fileName = basename(relativePath);
-
-      // Build failed path preserving directory structure
-      const failedDir =
-        relativeDir && relativeDir !== '.'
-          ? join(appConfig.processing.failedDirectory, relativeDir)
-          : appConfig.processing.failedDirectory;
-
-      // Ensure the failed subdirectory exists
-      await mkdir(failedDir, { recursive: true });
-
-      const destPath = join(failedDir, fileName);
-      await rename(filePath, destPath);
-      logger.debug({ from: filePath, to: destPath }, 'Moved failed file');
-    } catch (error) {
-      logger.warn({ error, filePath }, 'Failed to move failed file');
-    }
   }
 
   // ===========================================================================

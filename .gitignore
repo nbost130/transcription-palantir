@@ -80,7 +80,7 @@ transcripts/
 output/
 
 # Monitoring and metrics
-metrics/
+# metrics/
 monitoring/
 
 # Backup files
