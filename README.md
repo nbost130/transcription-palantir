@@ -212,6 +212,54 @@ docker-compose up --scale worker=4
 - **Helmet**: Security headers and protection
 - **Input Validation**: Zod schema validation
 
+## 📖 API Versioning
+
+The Transcription Palantir API uses semantic versioning with URL-based version prefixes (`/api/v1/*`). We maintain backward compatibility and provide clear migration paths for breaking changes.
+
+**Key Points:**
+- Current version: **v1** (`/api/v1/*`)
+- Breaking changes require new version prefix (e.g., `/api/v2/*`)
+- Non-breaking changes can be added to existing version
+- OpenAPI spec available at `/documentation/json`
+- Interactive API docs at `/docs`
+
+See [API Versioning Policy](./docs/API_VERSIONING.md) for complete details on:
+- Breaking vs non-breaking changes
+- Version support policy
+- Migration guidelines
+
+## 🔧 Consumer Type Generation
+
+Consumer applications can automatically generate TypeScript types from the OpenAPI specification for type-safe API integration.
+
+**Quick Start:**
+```bash
+# Install openapi-typescript
+npm install --save-dev openapi-typescript
+
+# Add to package.json
+{
+  "scripts": {
+    "generate:types": "openapi-typescript http://palantir.tailnet:3001/documentation/json -o src/types/palantir.d.ts"
+  }
+}
+
+# Generate types
+npm run generate:types
+```
+
+**Benefits:**
+- ✅ Type-safe API client code
+- ✅ Compile-time contract enforcement
+- ✅ Automatic detection of breaking changes
+- ✅ IDE autocomplete and IntelliSense
+
+See [Consumer Type Generation Guide](./docs/CONSUMER_TYPE_GENERATION.md) for:
+- Complete setup instructions
+- Usage examples
+- Best practices
+- Troubleshooting
+
 ## 📚 Documentation
 
 - [API Documentation](./docs/api.md)
