@@ -205,16 +205,22 @@ export const retryJobSchema = {
     },
     required: ['jobId'],
   },
-  body: {
-    type: 'object',
-    additionalProperties: false,
-  },
   response: {
     200: {
       type: 'object',
       properties: {
         success: { type: 'boolean' },
         data: { type: 'object' },
+        timestamp: { type: 'string' },
+        requestId: { type: 'string' },
+      },
+    },
+    400: {
+      description: 'Bad request (e.g., file not accessible).',
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', default: false },
+        error: { type: 'string' },
         timestamp: { type: 'string' },
         requestId: { type: 'string' },
       },
@@ -260,10 +266,6 @@ export const getQueueStatsSchema = {
 
 export const cleanFailedJobsSchema = {
   description: 'Clean failed jobs from queue history',
-  body: {
-    type: 'object',
-    additionalProperties: false,
-  },
   tags: ['queue'],
   response: {
     200: {
