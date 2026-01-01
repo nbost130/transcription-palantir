@@ -197,13 +197,15 @@ export class ApiServer {
     // Request logging (also attaches startTime to request)
     fastify.addHook('onRequest', requestLogger);
 
-    // Add response time header
+    // Add response time header and API version header
     fastify.addHook('onSend', async (request, reply) => {
       const startTime = (request as any).startTime;
       if (startTime) {
         const duration = Date.now() - startTime;
         reply.header('X-Response-Time', `${duration}ms`);
       }
+      // Add API version header for version detection
+      reply.header('X-API-Version', '1.0.0');
     });
   }
 

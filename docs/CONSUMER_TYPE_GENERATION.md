@@ -213,7 +213,8 @@ class PalantirClient {
   }
 
   async createJob(data: CreateJobRequest): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/api/v1/jobs`, {
+    const url = new URL('/api/v1/jobs', this.baseUrl);
+    const response = await fetch(url.toString(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
