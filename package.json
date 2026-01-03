@@ -27,6 +27,7 @@
     "docker:stop": "docker-compose down",
     "deploy:staging": "bun run scripts/deploy-staging.ts",
     "deploy:production": "bun run scripts/deploy-production.ts",
+    "check:env": "bun run scripts/check-env.ts",
     "biome:lint": "biome lint ./src ./tests",
     "biome:format": "biome format --write ./src ./tests",
     "biome:check": "biome check --write ./src ./tests",

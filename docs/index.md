@@ -16,6 +16,7 @@ Modern TypeScript transcription system with BullMQ, Redis, and Whisper.cpp integ
 - [Project Overview](./project-overview.md) - Executive summary and high-level architecture
 - [Source Tree Analysis](./source-tree.md) - Annotated directory structure
 - [Deep Dive: Internals](./deep-dive.md) - Detailed analysis of Queue, Worker, and API logic
+- [GitHub Issues Snapshot](./github-issues.md) - Open/closed backlog reference (refresh before planning)
 
 ## Getting Started
 

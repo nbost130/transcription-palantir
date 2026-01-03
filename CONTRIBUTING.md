@@ -174,6 +174,7 @@ For feature requests, please provide:
 - Update TODO.md for project planning changes
 - Add JSDoc comments for new APIs
 - Update type definitions as needed
+- Refresh `docs/github-issues.md` with the latest backlog snapshot (via the curl/python helper noted in that file) whenever you kick off a planning workflow or after major issue churn.
 
 ## 🏗️ Architecture Guidelines
 

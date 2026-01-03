@@ -10,7 +10,7 @@ import { appConfig } from '../../config/index.js';
 import { fasterWhisperService } from '../../services/faster-whisper.js';
 import { fileWatcher } from '../../services/file-watcher.js';
 import { transcriptionQueue } from '../../services/queue.js';
-import type { ServiceHealth, SystemHealth } from '../../types/index.js';
+import type { DirectoryHealth, ServiceHealth, SystemHealth } from '../../types/index.js';
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -23,6 +23,36 @@ async function checkDirectoryAccess(dirPath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function getDirectoryHealth(): Promise<DirectoryHealth[]> {
+  const now = new Date().toISOString();
+  const directories = [
+    { name: 'watch', path: appConfig.processing.watchDirectory },
+    { name: 'output', path: appConfig.processing.outputDirectory },
+    { name: 'completed', path: appConfig.processing.completedDirectory },
+    { name: 'failed', path: appConfig.processing.failedDirectory },
+  ];
+
+  const checks = await Promise.all(
+    directories.map(async (directory) => {
+      const accessible = await checkDirectoryAccess(directory.path);
+      const result: DirectoryHealth = {
+        name: directory.name,
+        path: directory.path,
+        accessible,
+        lastChecked: now,
+      };
+
+      if (!accessible) {
+        result.note = 'Path missing or lacks permissions';
+      }
+
+      return result;
+    })
+  );
+
+  return checks;
 }
 
 // =============================================================================
@@ -77,6 +107,7 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
             properties: {
               status: { type: 'string' },
               services: { type: 'array' },
+              paths: { type: 'array' },
               timestamp: { type: 'string' },
             },
           },
@@ -85,6 +116,7 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
     },
     async (_request, reply) => {
       const services: ServiceHealth[] = [];
+      const paths = await getDirectoryHealth();
 
       // Check Queue Service
       try {
@@ -133,6 +165,7 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
       return {
         status: allServicesUp ? 'ready' : 'not ready',
         services,
+        paths,
         timestamp: new Date().toISOString(),
       };
     }
@@ -161,6 +194,7 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
               redisStatus: { type: 'string' },
               queueStats: { type: 'object' },
               services: { type: 'array' },
+              paths: { type: 'array' },
               metrics: { type: 'object' },
             },
           },
@@ -169,6 +203,7 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
     },
     async (_request, _reply) => {
       const services: ServiceHealth[] = [];
+      const paths = await getDirectoryHealth();
 
       // Check Whisper binary status (Story 2.6)
       const whisperHealth = await fasterWhisperService.getHealthStatus();
@@ -277,6 +312,7 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
         redisStatus,
         queueStats,
         services,
+        paths,
         metrics: {
           jobs: {
             total: queueStats.waiting + queueStats.processing + queueStats.completed + queueStats.failed,

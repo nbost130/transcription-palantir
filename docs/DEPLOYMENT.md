@@ -41,6 +41,12 @@ bash scripts/deploy-to-mithrandir.sh
 ssh mithrandir "systemctl --user restart transcription-palantir"
 ```
 
+## Pre-Deployment Checklist
+
+1. **Validate environment files** – Run `bun run check:env -- --env-file ~/transcription-palantir/.env --platform linux` (or point to the remote path) and ensure it matches `.env.production`. The script fails fast if directories drift or macOS paths sneak into the Linux host.
+2. **Confirm mounts** – Double check `/mnt/data/whisper-batch` is mounted and contains `inbox`, `completed/transcripts`, and `failed` folders. The service will now refuse to start if the mount is missing.
+3. **Commit template changes** – If production paths legitimately change, update `.env.production`, rerun the check, and include the doc changes in the deploy PR.
+
 ## Verification
 
 ### Check Deployment Status
@@ -185,4 +191,3 @@ ssh mithrandir "redis-cli ping"
 - **Development Workflow:** `docs/DEVELOPMENT_WORKFLOW.md` - Development process
 - **Production Guidelines:** `docs/PRODUCTION_GUIDELINES.md` - Production rules
 - **Project Guide:** `CLAUDE.md` - AI assistant instructions
-

@@ -120,4 +120,16 @@ export async function jobRoutes(fastify: FastifyInstance, _opts: FastifyPluginOp
     },
     jobsController.cleanFailedJobs
   );
+
+  // ---------------------------------------------------------------------------
+  // Get Stuck Jobs
+  // ---------------------------------------------------------------------------
+
+  fastify.get(
+    '/jobs/stuck',
+    {
+      schema: jobsSchemas.getStuckJobsSchema,
+    },
+    jobsController.getStuckJobs
+  );
 }
