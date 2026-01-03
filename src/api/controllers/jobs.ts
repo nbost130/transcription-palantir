@@ -651,3 +651,50 @@ export async function cleanFailedJobs(request: FastifyRequest, _reply: FastifyRe
 
   return response;
 }
+
+export async function getStuckJobs(
+  request: FastifyRequest<{ Querystring: { thresholdSeconds?: number } }>,
+  _reply: FastifyReply
+) {
+  const thresholdSeconds = request.query.thresholdSeconds || 3600;
+
+  // Get all active jobs (processing state)
+  const activeJobs = await transcriptionQueue.getJobs(JobStatus.PROCESSING, 0, 10000);
+
+  const now = Date.now();
+  const stuckJobs = [];
+
+  // Filter jobs that exceed the threshold
+  for (const job of activeJobs) {
+    if (job.processedOn) {
+      const stuckDurationMs = now - job.processedOn;
+      const stuckDurationSeconds = Math.floor(stuckDurationMs / 1000);
+
+      if (stuckDurationSeconds > thresholdSeconds) {
+        stuckJobs.push({
+          jobId: job.id,
+          fileName: job.data.fileName,
+          status: 'processing',
+          startedAt: new Date(job.processedOn).toISOString(),
+          stuckDurationSeconds,
+        });
+      }
+    }
+  }
+
+  // Sort by stuck duration (longest first)
+  stuckJobs.sort((a, b) => b.stuckDurationSeconds - a.stuckDurationSeconds);
+
+  const response: ApiResponse = {
+    success: true,
+    data: {
+      jobs: stuckJobs,
+      count: stuckJobs.length,
+      thresholdSeconds,
+    },
+    timestamp: new Date().toISOString(),
+    requestId: request.id,
+  };
+
+  return response;
+}
