@@ -279,3 +279,37 @@ export const cleanFailedJobsSchema = {
     },
   },
 };
+
+export const getStuckJobsSchema = {
+  description: 'Get jobs stuck in processing state',
+  tags: ['jobs'],
+  querystring: {
+    type: 'object',
+    properties: {
+      thresholdSeconds: {
+        type: 'number',
+        minimum: 1,
+        default: 3600,
+        description: 'Threshold in seconds for determining stuck jobs (default: 3600 = 1 hour)',
+      },
+    },
+  },
+  response: {
+    200: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: {
+          type: 'object',
+          properties: {
+            jobs: { type: 'array' },
+            count: { type: 'number' },
+            thresholdSeconds: { type: 'number' },
+          },
+        },
+        timestamp: { type: 'string' },
+        requestId: { type: 'string' },
+      },
+    },
+  },
+};

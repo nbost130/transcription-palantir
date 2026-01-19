@@ -322,6 +322,45 @@ export class TranscriptionWorker {
   // TRANSCRIPTION LOGIC
   // ===========================================================================
 
+  private mapWhisperError(errorMessage: string): TranscriptionError {
+    if (errorMessage.includes('Python script failed with code')) {
+      const match = errorMessage.match(/code (\d+)/);
+      const exitCode = match?.[1] ? parseInt(match[1], 10) : undefined;
+      return TranscriptionError.fromCode(ErrorCodes.WHISPER_CRASH, {
+        exitCode,
+        originalError: errorMessage,
+      });
+    }
+
+    if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
+      return TranscriptionError.fromCode(ErrorCodes.WHISPER_TIMEOUT, {
+        originalError: errorMessage,
+      });
+    }
+
+    if (errorMessage.includes('Failed to spawn') || errorMessage.includes('ENOENT')) {
+      return TranscriptionError.fromCode(ErrorCodes.WHISPER_NOT_FOUND, {
+        originalError: errorMessage,
+      });
+    }
+
+    if (errorMessage.includes('Failed to read transcription output') || errorMessage.includes('empty')) {
+      return TranscriptionError.fromCode(ErrorCodes.WHISPER_INVALID_OUTPUT, {
+        originalError: errorMessage,
+      });
+    }
+
+    if (errorMessage.includes('corrupted') || errorMessage.includes('invalid format')) {
+      return TranscriptionError.fromCode(ErrorCodes.FILE_INVALID, {
+        originalError: errorMessage,
+      });
+    }
+
+    return TranscriptionError.fromCode(ErrorCodes.SYSTEM_UNKNOWN, {
+      originalError: errorMessage,
+    });
+  }
+
   private async runTranscription(
     inputPath: string,
     outputPath: string,
@@ -329,84 +368,36 @@ export class TranscriptionWorker {
   ): Promise<string> {
     const outputDir = dirname(outputPath);
 
-    // Ensure output directory exists (including subdirectories)
-    // Note: fileManager.ensureDirectories() ensures the base dirs, but this ensures the specific output subdir
-    // We can use fileManager logic or just keep it simple here.
-    // Since fileManager.ensureDirectories only creates the base folders, we still need to create the specific subdir if it's nested.
-    // But wait, fileManager.generateOutputPath returns a path.
-    // Let's use mkdir here as before.
-    // Actually, I should import mkdir from fs/promises.
-    // Wait, I removed mkdir from imports. I need to add it back if I use it.
-    // Or I can add a method to fileManager?
-    // Let's add mkdir back to imports.
-    // Wait, I used `import { writeFile } from 'node:fs/promises';`
-    // I need `mkdir` too.
-
     // Check if Whisper.cpp is available
     const binaryExists = await whisperService.validateBinary();
 
     if (!binaryExists) {
-      // Fall back to simulation if Whisper.cpp is not installed
       logger.warn('Whisper.cpp not found, using simulation mode');
       return await this.simulateTranscription(inputPath, outputPath, onProgress);
     }
 
     try {
-      // Use whisperService which has the correct command format
       logger.info({ inputPath, outputDir }, 'Running Whisper.cpp transcription via whisperService');
 
       const result = await fasterWhisperService.transcribe(inputPath, outputDir, {
         model: 'medium',
         device: 'cpu',
-        computeType: 'int8', // int8 for CPU compatibility (float16 requires GPU)
+        computeType: 'int8',
         beamSize: 5,
-        vadFilter: false, // Disable VAD for now (can enable later)
+        vadFilter: false,
         wordTimestamps: false,
       });
 
       logger.info({ transcriptPath: result.text }, 'Whisper.cpp transcription completed');
 
-      // whisperService returns the full result, we need the file path
-      // The transcript file will be: outputDir/basename.txt
       const inputBasename = basename(inputPath, extname(inputPath));
       const transcriptPath = join(outputDir, `${inputBasename}.txt`);
 
       return transcriptPath;
     } catch (error: any) {
       logger.error({ error, inputPath }, 'Whisper.cpp transcription failed');
-
-      // Map Whisper errors to specific error codes (Story 2.5)
       const errorMessage = error.message || String(error);
-
-      // Check for specific error patterns
-      if (errorMessage.includes('Python script failed with code')) {
-        // Extract exit code from error message
-        const match = errorMessage.match(/code (\d+)/);
-        const exitCode = match ? parseInt(match[1], 10) : undefined;
-        throw TranscriptionError.fromCode(ErrorCodes.WHISPER_CRASH, {
-          exitCode,
-          originalError: errorMessage,
-        });
-      } else if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
-        throw TranscriptionError.fromCode(ErrorCodes.WHISPER_TIMEOUT, {
-          originalError: errorMessage,
-        });
-      } else if (errorMessage.includes('Failed to spawn') || errorMessage.includes('ENOENT')) {
-        throw TranscriptionError.fromCode(ErrorCodes.WHISPER_NOT_FOUND, {
-          originalError: errorMessage,
-        });
-      } else if (errorMessage.includes('Failed to read transcription output') || errorMessage.includes('empty')) {
-        throw TranscriptionError.fromCode(ErrorCodes.WHISPER_INVALID_OUTPUT, {
-          originalError: errorMessage,
-        });
-      } else if (errorMessage.includes('corrupted') || errorMessage.includes('invalid format')) {
-        throw TranscriptionError.fromCode(ErrorCodes.FILE_INVALID, { originalError: errorMessage });
-      } else {
-        // Unknown Whisper error
-        throw TranscriptionError.fromCode(ErrorCodes.SYSTEM_UNKNOWN, {
-          originalError: errorMessage,
-        });
-      }
+      throw this.mapWhisperError(errorMessage);
     }
   }
 

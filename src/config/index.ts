@@ -4,6 +4,8 @@
  * Centralized configuration with environment-specific overrides
  */
 
+import { accessSync, existsSync, constants as fsConstants, mkdirSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import { config } from 'dotenv';
 import { z } from 'zod';
 import type { AppConfig } from '../types/index.js';
@@ -148,28 +150,96 @@ function createConfig(): AppConfig {
 // CONFIGURATION VALIDATION
 // =============================================================================
 
+type DirectoryRule = {
+  path: string;
+  label: string;
+  requireExisting?: boolean;
+};
+
+function validatePathSyntax(path: string, label: string): string | null {
+  if (!path) {
+    return `${label} is not set`;
+  }
+
+  if (!isAbsolute(path)) {
+    return `${label} must be an absolute path, received: ${path}`;
+  }
+
+  if (process.platform === 'linux' && path.startsWith('/Users')) {
+    return `${label} uses macOS path syntax on Linux: ${path}`;
+  }
+
+  if (process.platform === 'darwin' && path.startsWith('/mnt/')) {
+    return `${label} uses Linux path syntax on macOS: ${path}`;
+  }
+
+  return null;
+}
+
+function ensureDirectoryExists(path: string, label: string, requireExisting: boolean): string | null {
+  if (existsSync(path)) {
+    return null;
+  }
+
+  if (requireExisting) {
+    return `${label} does not exist or is not mounted: ${path}`;
+  }
+
+  try {
+    mkdirSync(path, { recursive: true });
+    return null;
+  } catch (error) {
+    return `Failed to create ${label} (${path}): ${(error as Error).message}`;
+  }
+}
+
+function validateDirectoryPermissions(path: string, label: string): string | null {
+  try {
+    accessSync(path, fsConstants.R_OK | fsConstants.W_OK);
+    return null;
+  } catch (error) {
+    return `${label} is not readable/writable (${path}): ${(error as Error).message}`;
+  }
+}
+
+function validateDirectories(config: AppConfig, errors: string[]): void {
+  const directoryRules: DirectoryRule[] = [
+    { path: config.processing.watchDirectory, label: 'WATCH_DIRECTORY', requireExisting: true },
+    { path: config.processing.outputDirectory, label: 'OUTPUT_DIRECTORY' },
+    { path: config.processing.completedDirectory, label: 'COMPLETED_DIRECTORY' },
+    { path: config.processing.failedDirectory, label: 'FAILED_DIRECTORY' },
+  ];
+
+  for (const rule of directoryRules) {
+    const { path, label, requireExisting = false } = rule;
+
+    // Validate path syntax
+    const syntaxError = validatePathSyntax(path, label);
+    if (syntaxError) {
+      errors.push(syntaxError);
+      continue;
+    }
+
+    // Ensure directory exists
+    const existsError = ensureDirectoryExists(path, label, requireExisting);
+    if (existsError) {
+      errors.push(existsError);
+      continue;
+    }
+
+    // Validate permissions
+    const permError = validateDirectoryPermissions(path, label);
+    if (permError) {
+      errors.push(permError);
+    }
+  }
+}
+
 function validateConfig(config: AppConfig): void {
   const errors: string[] = [];
 
-  // Validate directories exist or can be created
-  const directories = [
-    config.processing.watchDirectory,
-    config.processing.outputDirectory,
-    config.processing.completedDirectory,
-    config.processing.failedDirectory,
-  ];
+  validateDirectories(config, errors);
 
-  // Check for wrong OS paths (prevents macOS paths on Linux and vice versa)
-  for (const dir of directories) {
-    if (process.platform === 'linux' && dir.startsWith('/Users')) {
-      errors.push(`Invalid macOS path on Linux: ${dir}`);
-    }
-    if (process.platform === 'darwin' && dir.startsWith('/mnt')) {
-      errors.push(`Invalid Linux path on macOS: ${dir}`);
-    }
-  }
-
-  // Additional validation logic can be added here
   if (config.processing.maxWorkers < config.processing.minWorkers) {
     errors.push('MAX_WORKERS must be greater than or equal to MIN_WORKERS');
   }

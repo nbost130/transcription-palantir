@@ -154,4 +154,28 @@ describe('API Integration Tests', () => {
     expect(data.report).toBeDefined();
     expect(typeof data.report.filesScanned).toBe('number');
   });
+
+  test('GET /jobs/stuck should return empty array when no stuck jobs', async () => {
+    const response = await fetch(`${BASE_URL}/api/v1/jobs/stuck`);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(data.data).toHaveProperty('jobs');
+    expect(data.data).toHaveProperty('count');
+    expect(data.data).toHaveProperty('thresholdSeconds');
+    expect(Array.isArray(data.data.jobs)).toBe(true);
+    expect(data.data.jobs.length).toBe(0);
+    expect(data.data.count).toBe(0);
+    expect(data.data.thresholdSeconds).toBe(3600); // default threshold
+  });
+
+  test('GET /jobs/stuck?thresholdSeconds=7200 should use custom threshold', async () => {
+    const response = await fetch(`${BASE_URL}/api/v1/jobs/stuck?thresholdSeconds=7200`);
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.success).toBe(true);
+    expect(data.data.thresholdSeconds).toBe(7200);
+  });
 });

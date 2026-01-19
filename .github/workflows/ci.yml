@@ -43,6 +43,9 @@ jobs:
       - name: 📦 Install dependencies
         run: npm ci
 
+      - name: 📁 Create required directories
+        run: mkdir -p /tmp/audio-input
+
       - name: 🧪 Run tests
         run: npm test
 

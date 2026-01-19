@@ -10,7 +10,7 @@ import { appConfig } from '../../config/index.js';
 import { fasterWhisperService } from '../../services/faster-whisper.js';
 import { fileWatcher } from '../../services/file-watcher.js';
 import { transcriptionQueue } from '../../services/queue.js';
-import type { ServiceHealth, SystemHealth } from '../../types/index.js';
+import type { DirectoryHealth, ServiceHealth } from '../../types/index.js';
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -23,6 +23,115 @@ async function checkDirectoryAccess(dirPath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function getQueueServiceHealth(): Promise<ServiceHealth> {
+  const queueStartTime = Date.now();
+  try {
+    const isQueueReady = transcriptionQueue.isReady;
+    const queueResponseTime = Date.now() - queueStartTime;
+
+    return {
+      name: 'queue',
+      status: isQueueReady ? 'up' : 'down',
+      lastCheck: new Date().toISOString(),
+      responseTime: queueResponseTime,
+    };
+  } catch (error) {
+    return {
+      name: 'queue',
+      status: 'down',
+      lastCheck: new Date().toISOString(),
+      error: (error as Error).message,
+    };
+  }
+}
+
+async function getFileWatcherServiceHealth(): Promise<ServiceHealth> {
+  const watcherStartTime = Date.now();
+  try {
+    const watcherRunning = fileWatcher.running;
+    const watcherResponseTime = Date.now() - watcherStartTime;
+    const watchDirAccessible = await checkDirectoryAccess(appConfig.processing.watchDirectory);
+
+    return {
+      name: 'file_watcher',
+      status: watcherRunning && watchDirAccessible ? 'up' : 'down',
+      lastCheck: new Date().toISOString(),
+      responseTime: watcherResponseTime,
+      metadata: {
+        watching: watcherRunning,
+        directory: appConfig.processing.watchDirectory,
+        directoryAccessible: watchDirAccessible,
+        processedFiles: fileWatcher.processedCount,
+      },
+    };
+  } catch (error) {
+    return {
+      name: 'file_watcher',
+      status: 'down',
+      lastCheck: new Date().toISOString(),
+      error: (error as Error).message,
+      metadata: {
+        directory: appConfig.processing.watchDirectory,
+      },
+    };
+  }
+}
+
+async function getQueueStats() {
+  const defaultStats = {
+    waiting: 0,
+    processing: 0,
+    completed: 0,
+    failed: 0,
+  };
+
+  try {
+    if (!transcriptionQueue.isReady) {
+      return defaultStats;
+    }
+
+    const stats = await transcriptionQueue.getQueueStats();
+    return {
+      waiting: stats.waiting,
+      processing: stats.active,
+      completed: stats.completed,
+      failed: stats.failed,
+    };
+  } catch {
+    return defaultStats;
+  }
+}
+
+async function getDirectoryHealth(): Promise<DirectoryHealth[]> {
+  const now = new Date().toISOString();
+  const directories = [
+    { name: 'watch', path: appConfig.processing.watchDirectory },
+    { name: 'output', path: appConfig.processing.outputDirectory },
+    { name: 'completed', path: appConfig.processing.completedDirectory },
+    { name: 'failed', path: appConfig.processing.failedDirectory },
+  ];
+
+  const checks = await Promise.all(
+    directories.map(async (directory) => {
+      const accessible = await checkDirectoryAccess(directory.path);
+      const result: DirectoryHealth = {
+        name: directory.name,
+        path: directory.path,
+        accessible,
+        lastChecked: now,
+      };
+
+      if (!accessible) {
+        result.note = 'Path missing or lacks permissions';
+      }
+
+      return result;
+    })
+  );
+
+  return checks;
 }
 
 // =============================================================================
@@ -77,6 +186,7 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
             properties: {
               status: { type: 'string' },
               services: { type: 'array' },
+              paths: { type: 'array' },
               timestamp: { type: 'string' },
             },
           },
@@ -85,6 +195,7 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
     },
     async (_request, reply) => {
       const services: ServiceHealth[] = [];
+      const paths = await getDirectoryHealth();
 
       // Check Queue Service
       try {
@@ -133,6 +244,7 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
       return {
         status: allServicesUp ? 'ready' : 'not ready',
         services,
+        paths,
         timestamp: new Date().toISOString(),
       };
     }
@@ -161,6 +273,7 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
               redisStatus: { type: 'string' },
               queueStats: { type: 'object' },
               services: { type: 'array' },
+              paths: { type: 'array' },
               metrics: { type: 'object' },
             },
           },
@@ -168,106 +281,29 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
       },
     },
     async (_request, _reply) => {
-      const services: ServiceHealth[] = [];
+      // Collect all health data
+      const [paths, whisperHealth, queueService, fileWatcherService, queueStats] = await Promise.all([
+        getDirectoryHealth(),
+        fasterWhisperService.getHealthStatus(),
+        getQueueServiceHealth(),
+        getFileWatcherServiceHealth(),
+        getQueueStats(),
+      ]);
 
-      // Check Whisper binary status (Story 2.6)
-      const whisperHealth = await fasterWhisperService.getHealthStatus();
-
-      // Check Redis status (Story 2.6)
+      const services = [queueService, fileWatcherService];
       const redisStatus = transcriptionQueue.isReady ? 'connected' : 'disconnected';
 
-      // Check Queue Service
-      const queueStartTime = Date.now();
-      try {
-        const isQueueReady = transcriptionQueue.isReady;
-        const queueResponseTime = Date.now() - queueStartTime;
-
-        services.push({
-          name: 'queue',
-          status: isQueueReady ? 'up' : 'down',
-          lastCheck: new Date().toISOString(),
-          responseTime: queueResponseTime,
-        });
-      } catch (error) {
-        services.push({
-          name: 'queue',
-          status: 'down',
-          lastCheck: new Date().toISOString(),
-          error: (error as Error).message,
-        });
-      }
-
-      // Check File Watcher Service
-      const watcherStartTime = Date.now();
-      try {
-        const watcherRunning = fileWatcher.running;
-        const watcherResponseTime = Date.now() - watcherStartTime;
-
-        // Verify watch directory is still accessible
-        const watchDirAccessible = await checkDirectoryAccess(appConfig.processing.watchDirectory);
-
-        services.push({
-          name: 'file_watcher',
-          status: watcherRunning && watchDirAccessible ? 'up' : 'down',
-          lastCheck: new Date().toISOString(),
-          responseTime: watcherResponseTime,
-          metadata: {
-            watching: watcherRunning,
-            directory: appConfig.processing.watchDirectory, // Added from origin/main
-            directoryAccessible: watchDirAccessible,
-            processedFiles: fileWatcher.processedCount,
-          },
-        });
-      } catch (error) {
-        services.push({
-          name: 'file_watcher',
-          status: 'down',
-          lastCheck: new Date().toISOString(),
-          error: (error as Error).message,
-          metadata: {
-            directory: appConfig.processing.watchDirectory, // Added from origin/main
-          },
-        });
-      }
-
-      // Get queue statistics (Story 2.6 format)
-      let queueStats = {
-        waiting: 0,
-        processing: 0,
-        completed: 0,
-        failed: 0,
-      };
-
-      try {
-        if (transcriptionQueue.isReady) {
-          const stats = await transcriptionQueue.getQueueStats();
-          queueStats = {
-            waiting: stats.waiting,
-            processing: stats.active,
-            completed: stats.completed,
-            failed: stats.failed,
-          };
-        }
-      } catch (_error) {
-        // Stats unavailable
-      }
-
-      // Get system metrics
-      const memUsage = process.memoryUsage();
-      const cpuUsage = process.cpuUsage();
-
-      // Determine overall health status (Story 2.6)
+      // Determine overall health
       const isHealthy =
         services.every((s) => s.status === 'up') &&
         whisperHealth.whisperBinaryStatus === 'available' &&
         redisStatus === 'connected';
 
-      const health: SystemHealth & {
-        whisperBinaryStatus: 'available' | 'missing';
-        whisperVersion: string | null;
-        redisStatus: 'connected' | 'disconnected';
-        queueStats: typeof queueStats;
-      } = {
+      // Get system metrics
+      const memUsage = process.memoryUsage();
+      const cpuUsage = process.cpuUsage();
+
+      return {
         status: isHealthy ? 'healthy' : 'unhealthy',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
@@ -277,6 +313,7 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
         redisStatus,
         queueStats,
         services,
+        paths,
         metrics: {
           jobs: {
             total: queueStats.waiting + queueStats.processing + queueStats.completed + queueStats.failed,
@@ -291,8 +328,8 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
             total: 0,
           },
           system: {
-            cpuUsage: (cpuUsage.user + cpuUsage.system) / 1000000, // Convert to seconds
-            memoryUsage: memUsage.heapUsed / 1024 / 1024, // Convert to MB
+            cpuUsage: (cpuUsage.user + cpuUsage.system) / 1000000,
+            memoryUsage: memUsage.heapUsed / 1024 / 1024,
             diskUsage: 0, // TODO: Implement disk usage tracking
           },
           queue: {
@@ -302,8 +339,6 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
           },
         },
       };
-
-      return health;
     }
   );
 

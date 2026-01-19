@@ -292,6 +292,12 @@ On Mithrandir, Docker container network changes trigger Tailscale DNS reconfigur
 
 **Related Incident:** See incident report in `docs/reports/` directory
 
+## Common Pitfalls
+
+1. **Production paths must live under `/mnt/data/`** – Never copy your macOS `.env` into production. The service now refuses to start when Linux sees `/Users/...`, but deployment should also fail before that. Run `bun run check:env -- --env-file /path/to/.env --platform linux` from your workstation (or on Mithrandir) to verify parity with `.env.production`.
+2. **Verify mounts before deploys** – If `/mnt/data/whisper-batch` is not mounted the watch directory validation will fail. Fix the mount rather than pointing the service at a temporary local folder.
+3. **Document your overrides** – If you intentionally change production directories, update `.env.production` and rerun `bun run check:env` so the template continues to reflect reality.
+
 ## Known Issues
 
 ### Progress Reporting (Issue #9)
@@ -319,4 +325,3 @@ On Mithrandir, Docker container network changes trigger Tailscale DNS reconfigur
 - `docs/PRODUCTION_GUIDELINES.md` - Production deployment rules
 - `docs/reports/` - Incident reports and post-mortems
 - `.github/workflows/` - GitHub Actions workflow definitions
-
