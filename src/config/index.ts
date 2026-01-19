@@ -156,6 +156,52 @@ type DirectoryRule = {
   requireExisting?: boolean;
 };
 
+function validatePathSyntax(path: string, label: string): string | null {
+  if (!path) {
+    return `${label} is not set`;
+  }
+
+  if (!isAbsolute(path)) {
+    return `${label} must be an absolute path, received: ${path}`;
+  }
+
+  if (process.platform === 'linux' && path.startsWith('/Users')) {
+    return `${label} uses macOS path syntax on Linux: ${path}`;
+  }
+
+  if (process.platform === 'darwin' && path.startsWith('/mnt/')) {
+    return `${label} uses Linux path syntax on macOS: ${path}`;
+  }
+
+  return null;
+}
+
+function ensureDirectoryExists(path: string, label: string, requireExisting: boolean): string | null {
+  if (existsSync(path)) {
+    return null;
+  }
+
+  if (requireExisting) {
+    return `${label} does not exist or is not mounted: ${path}`;
+  }
+
+  try {
+    mkdirSync(path, { recursive: true });
+    return null;
+  } catch (error) {
+    return `Failed to create ${label} (${path}): ${(error as Error).message}`;
+  }
+}
+
+function validateDirectoryPermissions(path: string, label: string): string | null {
+  try {
+    accessSync(path, fsConstants.R_OK | fsConstants.W_OK);
+    return null;
+  } catch (error) {
+    return `${label} is not readable/writable (${path}): ${(error as Error).message}`;
+  }
+}
+
 function validateDirectories(config: AppConfig, errors: string[]): void {
   const directoryRules: DirectoryRule[] = [
     { path: config.processing.watchDirectory, label: 'WATCH_DIRECTORY', requireExisting: true },
@@ -165,46 +211,26 @@ function validateDirectories(config: AppConfig, errors: string[]): void {
   ];
 
   for (const rule of directoryRules) {
-    const { path, label, requireExisting } = rule;
+    const { path, label, requireExisting = false } = rule;
 
-    if (!path) {
-      errors.push(`${label} is not set`);
+    // Validate path syntax
+    const syntaxError = validatePathSyntax(path, label);
+    if (syntaxError) {
+      errors.push(syntaxError);
       continue;
     }
 
-    if (!isAbsolute(path)) {
-      errors.push(`${label} must be an absolute path, received: ${path}`);
+    // Ensure directory exists
+    const existsError = ensureDirectoryExists(path, label, requireExisting);
+    if (existsError) {
+      errors.push(existsError);
       continue;
     }
 
-    if (process.platform === 'linux' && path.startsWith('/Users')) {
-      errors.push(`${label} uses macOS path syntax on Linux: ${path}`);
-      continue;
-    }
-
-    if (process.platform === 'darwin' && path.startsWith('/mnt/')) {
-      errors.push(`${label} uses Linux path syntax on macOS: ${path}`);
-      continue;
-    }
-
-    if (!existsSync(path)) {
-      if (requireExisting) {
-        errors.push(`${label} does not exist or is not mounted: ${path}`);
-        continue;
-      }
-
-      try {
-        mkdirSync(path, { recursive: true });
-      } catch (error) {
-        errors.push(`Failed to create ${label} (${path}): ${(error as Error).message}`);
-        continue;
-      }
-    }
-
-    try {
-      accessSync(path, fsConstants.R_OK | fsConstants.W_OK);
-    } catch (error) {
-      errors.push(`${label} is not readable/writable (${path}): ${(error as Error).message}`);
+    // Validate permissions
+    const permError = validateDirectoryPermissions(path, label);
+    if (permError) {
+      errors.push(permError);
     }
   }
 }

@@ -1,6 +1,17 @@
 #!/bin/sh
 # Pre-commit hook: Run quality checks before allowing commit
 
+# Get list of staged files
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
+
+# Check if only markdown files are staged
+NON_MD_FILES=$(echo "$STAGED_FILES" | grep -v '\.md$' || true)
+
+if [ -z "$NON_MD_FILES" ]; then
+  echo "📝 Only markdown files detected - skipping code quality checks"
+  exit 0
+fi
+
 echo "🔨 Checking TypeScript compilation..."
 npm run build || exit 1
 
