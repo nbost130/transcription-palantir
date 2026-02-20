@@ -175,17 +175,43 @@ bun run format        # Prettier formatting
 
 ## 🚢 Deployment
 
-### Staging Deployment
+### systemd (Mithrandir Production)
 
+Palantir runs as a user-level systemd service on Mithrandir. The service file is at `scripts/transcription-palantir.service`.
+
+**Install the service:**
 ```bash
-bun run deploy:staging
+# Copy service file to systemd user directory
+cp scripts/transcription-palantir.service ~/.config/systemd/user/transcription-palantir.service
+
+# Reload, enable, and start
+systemctl --user daemon-reload
+systemctl --user enable transcription-palantir
+systemctl --user start transcription-palantir
+
+# Check status
+systemctl --user status transcription-palantir
 ```
 
-### Production Deployment
-
+**Deploy code updates:**
 ```bash
-bun run deploy:production
+# On Mithrandir
+cd ~/transcription-palantir
+git pull
+bun install
+bun run build
+systemctl --user restart transcription-palantir
 ```
+
+#### Zombie Process Prevention
+
+The systemd unit includes three layers of defense against orphaned bun child processes:
+
+1. **`KillMode=control-group`** - Kills the entire cgroup (main process + all children) on stop. This is the primary defense.
+2. **`TimeoutStopSec=15`** - If graceful shutdown hangs, systemd sends SIGKILL after 15 seconds.
+3. **`ExecStopPost=fuser -k 9003/tcp`** - Force-kills anything still bound to port 9003 after stop.
+
+> **Incident (2026-02-01 to 2026-02-20):** Palantir received SIGTERM but a bun child process survived and held port 9003 at 99.9% CPU for 19 days. The systemd service couldn't restart because of EADDRINUSE, producing 1,019 failed restart attempts in the log. The zombie was only cleared by manual `kill -9`. The three systemd directives above were added to prevent recurrence.
 
 ### Docker Deployment
 

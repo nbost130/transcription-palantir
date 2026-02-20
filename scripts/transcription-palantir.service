@@ -1,0 +1,36 @@
+[Unit]
+Description=Transcription Palantir - Modern TypeScript Transcription Service
+After=network.target redis.service
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Service]
+Type=simple
+WorkingDirectory=/home/nbost/transcription-palantir
+Environment="PATH=/home/nbost/.bun/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="NODE_ENV=production"
+EnvironmentFile=/home/nbost/transcription-palantir/.env
+ExecStart=/home/nbost/.bun/bin/bun run /home/nbost/transcription-palantir/dist/index.js
+
+# Kill ALL processes in the cgroup on stop (prevents zombie children holding the port)
+KillMode=control-group
+
+# Give 15s for graceful shutdown, then SIGKILL
+TimeoutStopSec=15
+
+# Safety net: force-kill anything left on port 9003 after stop
+ExecStopPost=/usr/bin/fuser -k 9003/tcp
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+
+StandardOutput=append:/home/nbost/transcription-palantir/logs/service.log
+StandardError=append:/home/nbost/transcription-palantir/logs/service-error.log
+
+# Resource limits
+LimitNOFILE=65536
+Nice=5
+
+[Install]
+WantedBy=default.target
