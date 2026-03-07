@@ -50,6 +50,7 @@ jobs:
       run: |
         ssh nbost@100.77.230.53 << 'ENDSSH'
           set -e
+          export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 
           echo "📂 Navigating to project directory..."
           cd /home/nbost/transcription-palantir
@@ -72,16 +73,16 @@ jobs:
           sleep 2
 
           echo "🔄 Restarting service..."
-          sudo systemctl restart transcription-palantir
+          systemctl --user restart transcription-palantir
 
           echo "⏳ Waiting for service to start..."
           sleep 5
 
           echo "🔍 Verifying service is running..."
           # Check systemd service is actually active
-          if ! sudo systemctl is-active --quiet transcription-palantir; then
+          if ! systemctl --user is-active --quiet transcription-palantir; then
             echo "❌ Service failed to start"
-            sudo systemctl status transcription-palantir --no-pager -l
+            systemctl --user status transcription-palantir --no-pager -l
             exit 1
           fi
 
