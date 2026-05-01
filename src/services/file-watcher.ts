@@ -405,11 +405,7 @@ export class FileWatcherService {
     }
   }
 
-  private async scanDirectoryRecursively(
-    dirPath: string,
-    maxDepth: number = 3,
-    currentDepth: number = 0
-  ): Promise<string[]> {
+  private async scanDirectoryRecursively(dirPath: string, maxDepth = 3, currentDepth = 0): Promise<string[]> {
     const foundFiles: string[] = [];
 
     if (currentDepth >= maxDepth) {

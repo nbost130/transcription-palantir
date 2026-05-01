@@ -323,7 +323,7 @@ export class WhisperService {
         // Whisper typically outputs progress like: "progress =  42%"
         const progressMatch = output.match(/progress\s*=\s*(\d+)%/i);
         if (progressMatch && onProgress) {
-          currentProgress = parseInt(progressMatch[1], 10);
+          currentProgress = Number.parseInt(progressMatch[1], 10);
           onProgress({
             progress: currentProgress,
             stage: 'processing',

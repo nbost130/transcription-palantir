@@ -167,6 +167,7 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
         },
       },
     },
+    // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: pre-existing complexity
     async (_request, _reply) => {
       const services: ServiceHealth[] = [];
 

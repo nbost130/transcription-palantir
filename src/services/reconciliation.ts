@@ -37,7 +37,8 @@ export class ReconciliationService {
     try {
       // 1. Scan Inbox
       const files = await readdir(this.config.processing.watchDirectory);
-      const mp3Files = files.filter((f) => f.toLowerCase().endsWith('.mp3'));
+      const supportedExts = ['.mp3', '.m4a', '.wav', '.flac', '.ogg', '.mp4', '.mov'];
+      const mp3Files = files.filter((f) => supportedExts.some((ext) => f.toLowerCase().endsWith(ext)));
       report.filesScanned = mp3Files.length;
 
       // 2. Get active jobs from Redis
@@ -61,7 +62,10 @@ export class ReconciliationService {
           // Orphaned file found!
           logger.warn(`[SELF-HEAL] Found orphaned file: ${filename}. Creating job...`);
 
-          await this.queue.addJob({ fileName: filename });
+          await this.queue.addJob({
+            fileName: filename,
+            filePath: join(this.config.processing.watchDirectory, filename),
+          });
           report.jobsCreated++;
 
           // 4. Cleanup partial outputs (if any existed from a previous attempt)

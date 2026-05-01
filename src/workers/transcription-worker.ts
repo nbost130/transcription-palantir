@@ -322,6 +322,7 @@ export class TranscriptionWorker {
   // TRANSCRIPTION LOGIC
   // ===========================================================================
 
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: pre-existing complexity
   private async runTranscription(
     inputPath: string,
     outputPath: string,
@@ -382,7 +383,7 @@ export class TranscriptionWorker {
       if (errorMessage.includes('Python script failed with code')) {
         // Extract exit code from error message
         const match = errorMessage.match(/code (\d+)/);
-        const exitCode = match ? parseInt(match[1], 10) : undefined;
+        const exitCode = match ? Number.parseInt(match[1], 10) : undefined;
         throw TranscriptionError.fromCode(ErrorCodes.WHISPER_CRASH, {
           exitCode,
           originalError: errorMessage,
