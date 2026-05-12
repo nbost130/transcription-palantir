@@ -253,13 +253,12 @@ export class TranscriptionQueue {
   // ===========================================================================
 
   async getQueueStats() {
-    const [waiting, active, completed, failed, delayed, prioritized] = await Promise.all([
+    const [waiting, active, completed, failed, delayed] = await Promise.all([
       this.queue.getWaiting(),
       this.queue.getActive(),
       this.queue.getCompleted(),
       this.queue.getFailed(),
       this.queue.getDelayed(),
-      this.queue.getPrioritized(), // BullMQ 5: prioritized jobs stored separately
     ]);
 
     return {
@@ -268,14 +267,12 @@ export class TranscriptionQueue {
       completed: completed?.length ?? 0,
       failed: failed?.length ?? 0,
       delayed: delayed?.length ?? 0,
-      prioritized: prioritized?.length ?? 0,
       total:
         (waiting?.length ?? 0) +
         (active?.length ?? 0) +
         (completed?.length ?? 0) +
         (failed?.length ?? 0) +
-        (delayed?.length ?? 0) +
-        (prioritized?.length ?? 0),
+        (delayed?.length ?? 0),
     };
   }
 
