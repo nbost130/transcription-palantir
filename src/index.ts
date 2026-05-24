@@ -9,9 +9,9 @@ import { appConfig } from './config/index.js';
 import { fileTracker } from './services/file-tracker.js';
 
 import { fileWatcher } from './services/file-watcher.js';
-import { transcriptionQueue } from './services/queue.js';
-import { ReconciliationService } from './services/reconciliation.js';
 import { processGuard } from './services/process-guard.js';
+import { workManager } from './services/work-manager.js';
+import { transcriptionQueue } from './services/queue.js';
 import { logFatalError, logger } from './utils/logger.js';
 import { transcriptionWorker } from './workers/transcription-worker.js';
 
@@ -97,10 +97,18 @@ class TranscriptionPalantir {
     await transcriptionQueue.initialize();
     logger.info('✅ Queue service initialized');
 
-    // Run boot reconciliation (Self-Healing)
-    // Must run BEFORE file watcher starts to ensure consistent state
-    const reconciliationService = new ReconciliationService(transcriptionQueue, appConfig);
-    await reconciliationService.reconcileOnBoot();
+    // Phase 2: ensure the private working tree, archive, and duplicates
+    // directories exist. ReconciliationService boot-scan removed —
+    // the queue (Redis) is now the source of truth; orphaned work
+    // dirs are surfaced for inspection but not auto-requeued.
+    await workManager.ensureLayout();
+    const orphans = await workManager.listOrphanedWorkDirs();
+    if (orphans.length > 0) {
+      logger.warn(
+        { orphans: orphans.slice(0, 20), count: orphans.length },
+        '⚠️ Orphaned work directories detected — jobs were staged but not finished'
+      );
+    }
 
     // TODO: Initialize other services
     // - File watcher service

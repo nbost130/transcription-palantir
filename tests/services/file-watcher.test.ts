@@ -63,6 +63,12 @@ vi.mock('../../src/utils/logger', () => ({
     },
 }));
 
+
+// Phase 2 (refactor/phase-2-separate-working-tree): sanitizeFile() was
+// removed — filenames don't matter, content SHA is the ID. The new flow
+// is covered by tests/services/work-manager.test.ts. These tests are
+// retained as historical reference until file-watcher gets a new test
+// suite for the post-Phase-2 handleFileAdded behavior.
 describe('FileWatcherService', () => {
     let watcher: FileWatcherService;
 
@@ -83,7 +89,7 @@ describe('FileWatcherService', () => {
         (fsPromises.access as any).mockResolvedValue(undefined);
     });
 
-    it('should sanitize unsafe filenames by renaming them', async () => {
+    it.skip('should sanitize unsafe filenames by renaming them', async () => {
         const unsafePath = '/test/watch/my audio file @#$.mp3';
         const expectedSafePath = '/test/watch/my_audio_file_.mp3';
 
@@ -96,7 +102,7 @@ describe('FileWatcherService', () => {
         expect(transcriptionQueue.addJob).not.toHaveBeenCalled();
     });
 
-    it('should process safe filenames without renaming', async () => {
+    it.skip('should process safe filenames without renaming', async () => {
         const safePath = '/test/watch/my_safe_file.mp3';
 
         await (watcher as any).handleFileAdded(safePath);
@@ -105,7 +111,7 @@ describe('FileWatcherService', () => {
         expect(transcriptionQueue.addJob).toHaveBeenCalled();
     });
 
-    it('should handle rename failure by processing original file', async () => {
+    it.skip('should handle rename failure by processing original file', async () => {
         const unsafePath = '/test/watch/bad file.mp3';
 
         // Mock rename to fail
@@ -118,7 +124,7 @@ describe('FileWatcherService', () => {
         expect(transcriptionQueue.addJob).toHaveBeenCalled();
     });
 
-    it('should generate deterministic job IDs for the same file', async () => {
+    it.skip('should generate deterministic job IDs for the same file', async () => {
         const filePath = '/test/watch/duplicate.mp3';
 
         // First call

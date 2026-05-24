@@ -106,10 +106,7 @@ export class ProcessGuardService {
       if (result === 1) {
         logger.info({ token: this.token }, '🔓 Singleton lock released');
       } else {
-        logger.warn(
-          { token: this.token },
-          'Singleton lock was not owned by us at release time (TTL likely expired)'
-        );
+        logger.warn({ token: this.token }, 'Singleton lock was not owned by us at release time (TTL likely expired)');
       }
     } catch (error) {
       logger.error({ error }, 'Error releasing singleton lock');
@@ -133,13 +130,7 @@ export class ProcessGuardService {
     if (this.heartbeatTimer) return;
     const tick = async (): Promise<void> => {
       try {
-        const result = (await this.redis.eval(
-          REFRESH_SCRIPT,
-          1,
-          LOCK_KEY,
-          this.token,
-          String(LOCK_TTL_MS)
-        )) as number;
+        const result = (await this.redis.eval(REFRESH_SCRIPT, 1, LOCK_KEY, this.token, String(LOCK_TTL_MS))) as number;
         if (result === 0) {
           logger.error(
             { token: this.token },

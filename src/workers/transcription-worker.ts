@@ -11,6 +11,7 @@ import { Redis } from 'ioredis';
 import { appConfig, getRedisUrl } from '../config/index.js';
 import { fasterWhisperService } from '../services/faster-whisper.js';
 import { fileTracker } from '../services/file-tracker.js';
+import { workManager } from '../services/work-manager.js';
 import { whisperService } from '../services/whisper.js';
 import { type ErrorCode, ErrorCodes, TranscriptionError, type TranscriptionJob } from '../types/index.js';
 import { logger } from '../utils/logger.js';
@@ -158,7 +159,7 @@ export class TranscriptionWorker {
 
     logger.info('🔵 DEBUG: Setting up event listeners');
 
-    this.worker.on('completed', (job: Job) => {
+    this.worker.on('completed', async (job: Job) => {
       this.processedJobs++;
       logger.info(
         {
@@ -168,6 +169,18 @@ export class TranscriptionWorker {
         },
         '✅ Job completed successfully'
       );
+
+      // Phase 2: archive original inbox source out of the Syncthing-watched
+      // tree and clean up the per-job work dir. Idempotent — safe to retry.
+      const contentSha = job.data?.contentSha as string | undefined;
+      const originalInboxPath = job.data?.originalInboxPath as string | undefined;
+      if (contentSha) {
+        try {
+          await workManager.archiveOnSuccess(originalInboxPath, contentSha);
+        } catch (err) {
+          logger.error({ err, jobId: job.id, contentSha }, 'Failed to archive on success');
+        }
+      }
     });
 
     this.worker.on('failed', async (job: Job | undefined, error: Error) => {
