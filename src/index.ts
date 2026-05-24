@@ -11,6 +11,7 @@ import { fileTracker } from './services/file-tracker.js';
 import { fileWatcher } from './services/file-watcher.js';
 import { transcriptionQueue } from './services/queue.js';
 import { ReconciliationService } from './services/reconciliation.js';
+import { processGuard } from './services/process-guard.js';
 import { logFatalError, logger } from './utils/logger.js';
 import { transcriptionWorker } from './workers/transcription-worker.js';
 
@@ -41,13 +42,14 @@ class TranscriptionPalantir {
         '🔮 Starting Transcription Palantir...'
       );
 
-      // Check for existing instances before starting (disabled for now - causing issues)
-      // const canStart = await processGuard.checkForExistingInstance();
-      // if (!canStart) {
-      //   logger.error('🚨 Cannot start - another instance is already running');
-      //   logger.error('💡 To kill rogue processes, run: systemctl --user stop transcription-palantir && pkill -9 -f "bun.*transcription-palantir"');
-      //   process.exit(1);
-      // }
+      // Acquire singleton lock — Redis-backed mutex with TTL refresh.
+      // Survives clean deploys (outgoing process releases on stop) and
+      // crashes (TTL expires; next start takes over).
+      const acquired = await processGuard.acquire();
+      if (!acquired) {
+        logger.error('🚨 Another Palantir instance already holds the singleton lock — refusing to start');
+        process.exit(1);
+      }
 
       // Initialize core services
       await this.initializeServices();
@@ -116,6 +118,10 @@ class TranscriptionPalantir {
     // Close queue service
     await transcriptionQueue.close();
     logger.info('✅ Queue service closed');
+
+    // Release singleton lock (Redis mutex — see process-guard.ts)
+    await processGuard.release();
+    logger.info('✅ Singleton lock released');
   }
 
   // ===========================================================================

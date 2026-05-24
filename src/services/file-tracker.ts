@@ -1,59 +1,60 @@
 /**
  * 🔮 Transcription Palantir - Persistent File Tracker Service
  *
- * Redis-backed tracking of processed files to prevent duplicate job creation
- * across service restarts and ensure idempotent file processing.
+ * Redis-backed tracking of processed files. Dedup is keyed on the SHA-256
+ * hash of file CONTENTS, not on path+size+mtime — so a rename, a re-sync,
+ * or a copy of the same audio is recognised as already-processed.
  */
 
 import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { Redis as IORedis, type Redis } from 'ioredis';
 import { appConfig, getRedisUrl } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
-// =============================================================================
-// CONSTANTS
-// =============================================================================
-
 const REDIS_KEY_PREFIX = 'palantir:processed:';
 const REDIS_HASH_KEY = 'palantir:file-hashes';
-const TTL_DAYS = 30; // Keep processed file records for 30 days
+const TTL_DAYS = 30;
 const TTL_SECONDS = TTL_DAYS * 24 * 60 * 60;
 
-// =============================================================================
-// FILE TRACKER SERVICE
-// =============================================================================
+/**
+ * In-memory cache: streaming a SHA over a 10 MB file is ~30 ms. The same
+ * file is hashed multiple times per lifecycle (isProcessed, markProcessed,
+ * unmarkProcessed, getMetadata). Cache invalidates when size or mtime
+ * changes — same triple, same bytes, every time.
+ */
+interface HashCacheEntry {
+  size: number;
+  mtimeMs: number;
+  hash: string;
+}
+const HASH_CACHE = new Map<string, HashCacheEntry>();
+const HASH_CACHE_MAX_ENTRIES = 10_000;
 
 export class FileTrackerService {
   private redis: Redis;
   private isConnected = false;
 
   constructor() {
-    // Use a dedicated Redis connection
     this.redis = new IORedis(getRedisUrl(), {
       maxRetriesPerRequest: null,
       connectTimeout: appConfig.redis.connectTimeout,
       retryStrategy(times) {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
+        return Math.min(times * 50, 2000);
       },
     });
     this.setupEventListeners();
   }
 
-  // ===========================================================================
-  // LIFECYCLE
-  // ===========================================================================
-
   async connect(): Promise<void> {
-    if (this.isConnected) {
-      return;
-    }
-
+    if (this.isConnected) return;
     try {
-      // Redis connection is already established by queue service
-      // Just verify it's ready
-      if (this.redis.status === 'ready' || this.redis.status === 'connect' || this.redis.status === 'connecting') {
+      if (
+        this.redis.status === 'ready' ||
+        this.redis.status === 'connect' ||
+        this.redis.status === 'connecting'
+      ) {
         this.isConnected = true;
         logger.info('📝 File tracker using shared Redis connection');
       } else {
@@ -66,10 +67,7 @@ export class FileTrackerService {
   }
 
   async disconnect(): Promise<void> {
-    if (!this.isConnected) {
-      return;
-    }
-
+    if (!this.isConnected) return;
     try {
       await this.redis.quit();
       this.isConnected = false;
@@ -79,151 +77,119 @@ export class FileTrackerService {
     }
   }
 
-  // ===========================================================================
-  // FILE TRACKING
-  // ===========================================================================
-
   /**
-   * Check if a file has been processed
-   * Uses both file path and content hash for robust duplicate detection
+   * True if this file's CONTENT has been processed before, regardless of
+   * its current path. Path-based lookup is kept as a fast positive cache
+   * for the common "same file, same path" case; the authoritative check
+   * is the content hash.
    */
   async isProcessed(filePath: string): Promise<boolean> {
     try {
-      // Check by file path
       const pathKey = this.getPathKey(filePath);
       const pathExists = await this.redis.exists(pathKey);
+      if (pathExists) return true;
 
-      if (pathExists) {
-        return true;
-      }
-
-      // Check by content hash (catches renamed/moved files)
-      const fileHash = await this.getFileHash(filePath);
+      const fileHash = await this.getContentHash(filePath);
       const hashExists = await this.redis.hexists(REDIS_HASH_KEY, fileHash);
-
       return hashExists === 1;
     } catch (error) {
       logger.error({ error, filePath }, 'Error checking if file is processed');
-      // Fail open - allow processing if we can't check
       return false;
     }
   }
 
-  /**
-   * Mark a file as processed
-   * Stores both file path and content hash for comprehensive tracking
-   */
   async markProcessed(filePath: string, jobId: string): Promise<void> {
     try {
-      const fileHash = await this.getFileHash(filePath);
-      const timestamp = new Date().toISOString();
+      const fileHash = await this.getContentHash(filePath);
       const metadata = JSON.stringify({
         filePath,
         jobId,
-        processedAt: timestamp,
+        processedAt: new Date().toISOString(),
         fileHash,
       });
 
-      // Store by file path with TTL
       const pathKey = this.getPathKey(filePath);
       await this.redis.setex(pathKey, TTL_SECONDS, metadata);
-
-      // Store by content hash (no TTL - permanent deduplication)
       await this.redis.hset(REDIS_HASH_KEY, fileHash, metadata);
 
       logger.debug({ filePath, jobId, fileHash }, 'Marked file as processed');
     } catch (error) {
       logger.error({ error, filePath, jobId }, 'Error marking file as processed');
-      // Don't throw - this is not critical enough to fail the job
     }
   }
 
-  /**
-   * Remove a file from processed tracking
-   * Used when a job fails and needs to be retried
-   */
   async unmarkProcessed(filePath: string): Promise<void> {
     try {
-      const fileHash = await this.getFileHash(filePath);
-
-      // Remove by file path
+      const fileHash = await this.getContentHash(filePath);
       const pathKey = this.getPathKey(filePath);
       await this.redis.del(pathKey);
-
-      // Remove by content hash
       await this.redis.hdel(REDIS_HASH_KEY, fileHash);
-
       logger.debug({ filePath, fileHash }, 'Unmarked file as processed');
     } catch (error) {
       logger.error({ error, filePath }, 'Error unmarking file as processed');
     }
   }
 
-  /**
-   * Get processing metadata for a file
-   */
   async getMetadata(filePath: string): Promise<ProcessedFileMetadata | null> {
     try {
       const pathKey = this.getPathKey(filePath);
       const data = await this.redis.get(pathKey);
+      if (data) return JSON.parse(data);
 
-      if (data) {
-        return JSON.parse(data);
-      }
-
-      // Try by content hash
-      const fileHash = await this.getFileHash(filePath);
+      const fileHash = await this.getContentHash(filePath);
       const hashData = await this.redis.hget(REDIS_HASH_KEY, fileHash);
-
-      if (hashData) {
-        return JSON.parse(hashData);
-      }
-
-      return null;
+      return hashData ? JSON.parse(hashData) : null;
     } catch (error) {
       logger.error({ error, filePath }, 'Error getting file metadata');
       return null;
     }
   }
 
-  // ===========================================================================
-  // HELPER METHODS
-  // ===========================================================================
+  /**
+   * Public, intentionally exposed so callers (intake, audit tools)
+   * can compute the canonical content hash for any file path.
+   * Streams the file through SHA-256 — works on arbitrarily large files.
+   */
+  async getContentHash(filePath: string): Promise<string> {
+    const stats = await stat(filePath);
+    const cached = HASH_CACHE.get(filePath);
+    if (cached && cached.size === stats.size && cached.mtimeMs === stats.mtimeMs) {
+      return cached.hash;
+    }
+
+    const hash = await this.streamSha256(filePath);
+
+    if (HASH_CACHE.size >= HASH_CACHE_MAX_ENTRIES) {
+      const firstKey = HASH_CACHE.keys().next().value;
+      if (firstKey !== undefined) HASH_CACHE.delete(firstKey);
+    }
+    HASH_CACHE.set(filePath, { size: stats.size, mtimeMs: stats.mtimeMs, hash });
+
+    return hash;
+  }
+
+  private streamSha256(filePath: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const hasher = createHash('sha256');
+      const stream = createReadStream(filePath, { highWaterMark: 1024 * 1024 });
+      stream.on('data', (chunk) => hasher.update(chunk));
+      stream.on('end', () => resolve(hasher.digest('hex')));
+      stream.on('error', reject);
+    });
+  }
 
   private getPathKey(filePath: string): string {
     return `${REDIS_KEY_PREFIX}${filePath}`;
-  }
-
-  private async getFileHash(filePath: string): Promise<string> {
-    try {
-      const stats = await stat(filePath);
-      // Hash based on file path, size, and mtime for efficient duplicate detection
-      const hashInput = `${filePath}:${stats.size}:${stats.mtimeMs}`;
-      return createHash('sha256').update(hashInput).digest('hex');
-    } catch (_error) {
-      // If we can't stat the file, just hash the path
-      return createHash('sha256').update(filePath).digest('hex');
-    }
   }
 
   private setupEventListeners(): void {
     this.redis.on('error', (error) => {
       logger.error({ error }, 'File tracker Redis error');
     });
-
-    this.redis.on('connect', () => {
-      logger.debug('File tracker Redis connected');
-    });
-
-    this.redis.on('ready', () => {
-      logger.debug('File tracker Redis ready');
-    });
+    this.redis.on('connect', () => logger.debug('File tracker Redis connected'));
+    this.redis.on('ready', () => logger.debug('File tracker Redis ready'));
   }
 }
-
-// =============================================================================
-// TYPES
-// =============================================================================
 
 interface ProcessedFileMetadata {
   filePath: string;
@@ -231,9 +197,5 @@ interface ProcessedFileMetadata {
   processedAt: string;
   fileHash: string;
 }
-
-// =============================================================================
-// SINGLETON INSTANCE
-// =============================================================================
 
 export const fileTracker = new FileTrackerService();
