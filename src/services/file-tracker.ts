@@ -50,13 +50,9 @@ export class FileTrackerService {
   async connect(): Promise<void> {
     if (this.isConnected) return;
     try {
-      if (
-        this.redis.status === 'ready' ||
-        this.redis.status === 'connect' ||
-        this.redis.status === 'connecting'
-      ) {
+      if (this.redis.status === 'ready' || this.redis.status === 'connect' || this.redis.status === 'connecting') {
         this.isConnected = true;
-        logger.info('📝 File tracker using shared Redis connection');
+        logger.info('📝 File tracker using dedicated Redis connection');
       } else {
         throw new Error(`Redis connection not ready: ${this.redis.status}`);
       }
@@ -119,12 +115,24 @@ export class FileTrackerService {
   }
 
   async unmarkProcessed(filePath: string): Promise<void> {
+    // Always clear the path key first — independent of whether the file
+    // still exists on disk. The content-hash deletion is best-effort:
+    // if the file was deleted between markProcessed and now, streaming the
+    // SHA throws; we must not let that leave the path key locked for 30 days.
     try {
-      const fileHash = await this.getContentHash(filePath);
       const pathKey = this.getPathKey(filePath);
       await this.redis.del(pathKey);
-      await this.redis.hdel(REDIS_HASH_KEY, fileHash);
-      logger.debug({ filePath, fileHash }, 'Unmarked file as processed');
+
+      try {
+        const fileHash = await this.getContentHash(filePath);
+        await this.redis.hdel(REDIS_HASH_KEY, fileHash);
+        logger.debug({ filePath, fileHash }, 'Unmarked file as processed (path + hash)');
+      } catch (hashError) {
+        logger.debug(
+          { filePath },
+          'Unmarked path key; file unavailable to compute hash for content-key deletion'
+        );
+      }
     } catch (error) {
       logger.error({ error, filePath }, 'Error unmarking file as processed');
     }

@@ -99,4 +99,30 @@ describe.skipIf(skipIfNoRedis)('FileTrackerService - content hash dedup', () => 
     // Cached lookup should not require streaming again — generous bound.
     expect(cachedDuration).toBeLessThanOrEqual(firstDuration);
   });
+
+  it('unmarkProcessed clears the path key even if the file has been deleted (regression: PR #37 Gemini blocker)', async () => {
+    const bytes = Buffer.from('regression-unmark-' + Date.now());
+    const path = join(tmpDir, `unmark-deleted-${Date.now()}.ogg`);
+    await writeFile(path, bytes);
+
+    await tracker.markProcessed(path, 'job-unmark-test');
+    expect(await tracker.isProcessed(path)).toBe(true);
+
+    // Simulate file deletion mid-flight (e.g., user cleanup, rename race)
+    const { unlink } = await import('node:fs/promises');
+    await unlink(path);
+
+    // The BLOCKER from PR #37 review: before the fix, getContentHash() would throw
+    // when streaming a missing file, bypassing the path-key delete and leaving the
+    // path locked in Redis for 30 days. After the fix, the path key must clear
+    // independent of whether the content hash can be computed.
+    await tracker.unmarkProcessed(path);
+
+    // Verify the path key is gone: re-create the file with DIFFERENT bytes
+    // (so the content-hash registry can't help). If the path key was stuck,
+    // isProcessed would return true. With the fix, it returns false.
+    const differentBytes = Buffer.from('completely-different-bytes-' + Date.now());
+    await writeFile(path, differentBytes);
+    expect(await tracker.isProcessed(path)).toBe(false);
+  });
 });

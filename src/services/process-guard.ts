@@ -90,13 +90,18 @@ export class ProcessGuardService {
   }
 
   async release(): Promise<void> {
+    // Clear the heartbeat first regardless of acquired state.
     if (this.heartbeatTimer) {
-      clearInterval(this.heartbeatTimer);
+      clearTimeout(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
-    if (!this.acquired) return;
 
+    // Critical: even if we never acquired, the constructor opened a Redis
+    // connection. The finally block must always run to close it; otherwise
+    // a failed acquire() leaks a handle (stalls test runners; leaks fds
+    // in long-running supervisors that retry startup).
     try {
+      if (!this.acquired) return;
       const result = (await this.redis.eval(RELEASE_SCRIPT, 1, LOCK_KEY, this.token)) as number;
       if (result === 1) {
         logger.info({ token: this.token }, '🔓 Singleton lock released');
@@ -126,7 +131,7 @@ export class ProcessGuardService {
 
   private startHeartbeat(): void {
     if (this.heartbeatTimer) return;
-    this.heartbeatTimer = setInterval(async () => {
+    const tick = async (): Promise<void> => {
       try {
         const result = (await this.redis.eval(
           REFRESH_SCRIPT,
@@ -140,15 +145,21 @@ export class ProcessGuardService {
             { token: this.token },
             '🚨 Singleton lock was lost (TTL expired or stolen). Process should exit.'
           );
-          // Best-effort: signal ourselves to shut down. Do NOT exit here —
-          // the application's shutdown handler will clean up properly.
           process.kill(process.pid, 'SIGTERM');
+          return; // do not reschedule
         }
       } catch (error) {
         logger.error({ error }, 'Singleton heartbeat failed');
       }
-    }, HEARTBEAT_MS);
-    // Don't keep the event loop alive on this timer.
+      // Self-rescheduling: only schedule the NEXT heartbeat after this one
+      // resolves. A slow Redis op delays the next tick but never stacks
+      // concurrent evals on top of itself.
+      if (this.acquired) {
+        this.heartbeatTimer = setTimeout(tick, HEARTBEAT_MS);
+        this.heartbeatTimer.unref?.();
+      }
+    };
+    this.heartbeatTimer = setTimeout(tick, HEARTBEAT_MS);
     this.heartbeatTimer.unref?.();
   }
 }
