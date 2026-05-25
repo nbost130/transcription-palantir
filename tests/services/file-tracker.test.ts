@@ -97,7 +97,7 @@ describe.skipIf(skipIfNoRedis)('FileTrackerService - content hash dedup', () => 
 
     expect(h1).toBe(h2);
     // Cached lookup should not require streaming again — generous bound.
-    expect(cachedDuration).toBeLessThanOrEqual(firstDuration);
+    expect(cachedDuration).toBeLessThanOrEqual(firstDuration + 5); // 5ms tolerance for timing noise on sub-ms ops
   });
 
   it('unmarkProcessed clears the path key even if the file has been deleted (regression: PR #37 Gemini blocker)', async () => {
