@@ -26,7 +26,7 @@
  */
 
 import { constants } from 'node:fs';
-import { access, copyFile, mkdir, rename, rm, stat } from 'node:fs/promises';
+import { access, copyFile, mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
 import { basename, dirname, extname, join } from 'node:path';
 import { appConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
@@ -204,7 +204,6 @@ export class WorkManagerService {
     } catch {
       return [];
     }
-    const { readdir } = await import('node:fs/promises');
     const entries = await readdir(this.paths.workDir, { withFileTypes: true });
     return entries.filter((e) => e.isDirectory() && /^[0-9a-f]{64}$/.test(e.name)).map((e) => e.name);
   }

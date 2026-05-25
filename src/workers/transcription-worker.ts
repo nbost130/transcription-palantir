@@ -195,10 +195,15 @@ export class TranscriptionWorker {
         '❌ Job failed'
       );
 
-      // Unmark file as processed so it can be retried
-      if (job?.data.filePath) {
-        await fileTracker.unmarkProcessed(job.data.filePath);
-        logger.debug({ filePath: job.data.filePath }, 'Unmarked failed file for retry');
+      // Unmark file as processed so it can be retried.
+      // Phase 2: markProcessed was keyed to originalInboxPath (Syncthing-side
+      // path), not to the workPath. We must unmark the SAME key or retries
+      // are silently broken — Gemini PR #38 blocker.
+      const pathToUnmark =
+        (job?.data?.originalInboxPath as string | undefined) ?? job?.data.filePath;
+      if (pathToUnmark) {
+        await fileTracker.unmarkProcessed(pathToUnmark);
+        logger.debug({ pathToUnmark }, 'Unmarked failed file for retry');
       }
     });
 
@@ -266,7 +271,13 @@ export class TranscriptionWorker {
       await job.updateProgress(90);
 
       // Move completed file
-      await fileManager.moveCompletedFile(jobData.filePath);
+      // Phase 2: if workPath is set, the original inbox source has already
+      // been moved to archive/{YYYY-MM}/{sha}.{ext} by workManager.archiveOnSuccess()
+      // (fired from the 'completed' event listener). Calling moveCompletedFile()
+      // here would copy the work-tree source into completed/ — doubling storage.
+      if (!(jobData as { workPath?: string }).workPath) {
+        await fileManager.moveCompletedFile(jobData.filePath);
+      }
       await job.updateProgress(95);
 
       // Calculate processing time

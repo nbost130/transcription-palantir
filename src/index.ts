@@ -102,11 +102,17 @@ class TranscriptionPalantir {
     // the queue (Redis) is now the source of truth; orphaned work
     // dirs are surfaced for inspection but not auto-requeued.
     await workManager.ensureLayout();
-    const orphans = await workManager.listOrphanedWorkDirs();
-    if (orphans.length > 0) {
-      logger.warn(
-        { orphans: orphans.slice(0, 20), count: orphans.length },
-        '⚠️ Orphaned work directories detected — jobs were staged but not finished'
+    // Phase 2: list work dirs surviving across restart. These MAY be orphaned
+    // (job staged, never finished) OR legitimately pending (job in BullMQ queue,
+    // waiting for a worker). listOrphanedWorkDirs() currently does NOT cross-check
+    // the queue — that filter lands in Phase 3 alongside the dedup-saved KPI.
+    // Until then, log at info-level with honest naming so a normal post-restart
+    // state doesn't look like an alert.
+    const workDirs = await workManager.listOrphanedWorkDirs();
+    if (workDirs.length > 0) {
+      logger.info(
+        { workDirs: workDirs.slice(0, 20), count: workDirs.length },
+        'Pre-existing work directories carried over restart (may be in-flight or orphaned — Phase 3 will filter against queue)'
       );
     }
 
