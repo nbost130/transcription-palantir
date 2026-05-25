@@ -54,8 +54,8 @@ describe('ReconciliationService', () => {
         expect(report.filesScanned).toBe(2); // Only mp3s
         expect(report.jobsCreated).toBe(2);
         expect(mockQueue.addJob).toHaveBeenCalledTimes(2);
-        expect(mockQueue.addJob).toHaveBeenCalledWith({ fileName: 'file1.mp3' });
-        expect(mockQueue.addJob).toHaveBeenCalledWith({ fileName: 'file2.mp3' });
+        expect(mockQueue.addJob).toHaveBeenCalledWith({ fileName: 'file1.mp3', filePath: '/inbox/file1.mp3' });
+        expect(mockQueue.addJob).toHaveBeenCalledWith({ fileName: 'file2.mp3', filePath: '/inbox/file2.mp3' });
         expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('[SELF-HEAL]'));
     });
 
@@ -72,7 +72,7 @@ describe('ReconciliationService', () => {
         expect(report.jobsCreated).toBe(1); // Only file2.mp3 needs a job
         expect(report.jobsReconciled).toBe(1); // file1.mp3 was reconciled
         expect(mockQueue.addJob).toHaveBeenCalledTimes(1);
-        expect(mockQueue.addJob).toHaveBeenCalledWith({ fileName: 'file2.mp3' });
+        expect(mockQueue.addJob).toHaveBeenCalledWith({ fileName: 'file2.mp3', filePath: '/inbox/file2.mp3' });
     });
 
     it('should cleanup partial output files for restarted jobs', async () => {
