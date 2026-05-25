@@ -139,7 +139,7 @@ describe('Pipeline integration — stage / dedup / archive lifecycle', () => {
     expect(dupEntries[0]).toMatch(/second-different-name\.ogg$/);
 
     // Metrics: 1 stage, 1 archive, 1 dedup-saved
-    const snap = m.snapshot();
+    const snap = await m.snapshot();
     expect(snap.counters.dedupSaved).toBeGreaterThanOrEqual(1);
   });
 
@@ -164,11 +164,11 @@ describe('Pipeline integration — stage / dedup / archive lifecycle', () => {
   });
 
   it("metrics counters reflect the full pipeline behavior", async () => {
-    const before = m.snapshot().counters;
+    const before = (await m.snapshot()).counters;
     const subdir = join(inboxDir, 'metric-test');
     await mkdir(subdir, { recursive: true });
 
-    // Three unique files + 2 duplicates of the first
+    // Three unique files + one new (fresh-1) + one duplicate of fresh-1
     for (let i = 1; i <= 3; i++) {
       const p = join(subdir, `unique-${i}.ogg`);
       await writeFile(p, Buffer.from(`unique-content-${i}-${Date.now()}`));
@@ -190,7 +190,7 @@ describe('Pipeline integration — stage / dedup / archive lifecycle', () => {
     const r2 = await processNewInboxFile(dupCopy);
     expect(r2.action).toBe('quarantined');
 
-    const after = m.snapshot().counters;
+    const after = (await m.snapshot()).counters;
     expect(after.jobsStaged - before.jobsStaged).toBe(4); // 3 + the fresh-1
     expect(after.jobsArchived - before.jobsArchived).toBe(4); // all 4 transcribed
     expect(after.dedupSaved - before.dedupSaved).toBe(1); // fresh-1-copy
