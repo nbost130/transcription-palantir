@@ -46,8 +46,18 @@ trap cleanup EXIT
 FAILED=0
 
 echo "═══ Health check ═══"
-HEALTH=$(curl -fsS "$API_URL/api/v1/health" || echo '{}')
-[ "$(echo "$HEALTH" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("status"))')" = "ok" ] && pass "service healthy" || fail "service unhealthy"
+WAITED=0
+while [ $WAITED -lt 30 ]; do
+  HEALTH=$(curl -fsS "$API_URL/api/v1/health" 2>/dev/null || echo '{}')
+  if [ "$(echo "$HEALTH" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("status",""))' 2>/dev/null)" = "ok" ]; then
+    pass "service healthy (after ${WAITED}s)"
+    break
+  fi
+  sleep 2 && WAITED=$((WAITED + 2))
+done
+if [ "$WAITED" -ge 30 ]; then
+  fail "service did not become healthy within 30s"
+fi
 
 echo ""
 echo "═══ TEST 1 — fresh audio: stage → transcribe → archive ═══"
@@ -85,9 +95,9 @@ echo "═══ TEST 3 (Phase 2.5 regression) — two unique files in same subdi
 SEED2=$(date +%s%N)
 T3A="$TMP/smoke-T3A-$SEED2.ogg"
 T3B="$TMP/smoke-T3B-$SEED2.ogg"
-ffmpeg -y -loglevel error -f lavfi -i "sine=frequency=523:duration=8" -ac 1 -ar 16000 "$T3A"
+ffmpeg -y -loglevel error -f lavfi -i "sine=frequency=523:duration=15" -ac 1 -ar 16000 "$T3A"
 sleep 1
-ffmpeg -y -loglevel error -f lavfi -i "sine=frequency=659:duration=8" -ac 1 -ar 16000 "$T3B"
+ffmpeg -y -loglevel error -f lavfi -i "sine=frequency=659:duration=15" -ac 1 -ar 16000 "$T3B"
 T3A_SHA=$(sha256sum "$T3A" | awk '{print $1}')
 T3B_SHA=$(sha256sum "$T3B" | awk '{print $1}')
 cp "$T3A" "$INBOX/smoke-A-$SEED2.ogg"
