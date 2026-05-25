@@ -343,15 +343,19 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
   );
 
   // ---------------------------------------------------------------------------
-  // Metrics (Phase 2.5)
+  // Dedup stats (Phase 2.5)
   // ---------------------------------------------------------------------------
+  // Lives at /dedup-stats (not /metrics) because there's already a Prometheus
+  // /metrics endpoint exposing prom-client counters via metricsRoutes. Phase 3
+  // will fold these counters into the prom-client registry; for now this is a
+  // focused JSON endpoint so the dedup-saved KPI is at least observable.
 
   fastify.get(
-    '/metrics',
+    '/dedup-stats',
     {
       schema: {
         description:
-          'In-process counters: dedupSaved, jobsStaged/Archived/Failed. JSON snapshot, not Prometheus format (Phase 3 deliverable).',
+          'Phase 2.5 in-process counters as JSON: dedupSaved, jobsStaged/Archived/Failed. Phase 3 will migrate these to the Prometheus /metrics endpoint.',
         tags: ['health'],
       },
     },
