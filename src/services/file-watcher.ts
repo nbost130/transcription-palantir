@@ -14,6 +14,7 @@ import { getMimeType } from '../utils/file.js';
 import { logger } from '../utils/logger.js';
 import { fileTracker } from './file-tracker.js';
 import { transcriptionQueue } from './queue.js';
+import { workManager } from './work-manager.js';
 
 // =============================================================================
 // FILE WATCHER SERVICE
@@ -136,59 +137,48 @@ export class FileWatcherService {
 
   private async handleFileAdded(filePath: string): Promise<void> {
     try {
-      // 1. Sanitize filename first
-      const sanitizedPath = await this.sanitizeFile(filePath);
-
-      // If file was renamed, we stop here.
-      // The watcher will detect the "new" file (renamed version) and process it then.
-      if (sanitizedPath !== filePath) {
-        logger.info({ original: filePath, sanitized: sanitizedPath }, 'File renamed for sanitization');
-        return;
-      }
-
-      // 2. Skip if already processed (check both in-memory and persistent storage)
+      // In-memory hot-path dedup (per-process); the authoritative checks
+      // run below against (a) content SHA and (b) Redis dedup registry.
       if (this.processedFiles.has(filePath)) {
         return;
       }
 
-      // Check persistent storage for duplicate detection across restarts
+      // Validate the inbox file early. If validation fails we don't even
+      // bother computing a hash.
+      const validation = await this.validateFile(filePath);
+      if (!validation.valid || !validation.metadata) {
+        logger.warn({ filePath, reason: validation.reason }, 'File validation failed, skipping');
+        return;
+      }
+
+      // Compute the canonical content hash. Streamed SHA-256 — survives
+      // renames, re-syncs, copies, and the Syncthing rename war.
+      const contentSha = await fileTracker.getContentHash(filePath);
+
+      // Dedup against Redis. isProcessed() checks both path and content hash.
       const alreadyProcessed = await fileTracker.isProcessed(filePath);
       if (alreadyProcessed) {
-        logger.debug({ filePath }, 'File already processed (found in persistent storage), skipping');
-        this.processedFiles.add(filePath); // Add to in-memory cache
+        logger.info({ filePath, contentSha }, '♻️ Duplicate content detected — moving inbox file to duplicates/');
+        try {
+          await workManager.quarantineDuplicate(filePath, contentSha);
+        } catch (err) {
+          logger.error({ err, filePath, contentSha }, 'Failed to quarantine duplicate');
+        }
+        this.processedFiles.add(filePath);
         return;
       }
 
-      logger.info({ filePath }, 'New file detected');
+      // New content. Stage a private copy into the working tree.
+      logger.info({ filePath, contentSha }, 'New file detected — staging into work tree');
+      const staged = await workManager.setupForJob(filePath, contentSha);
 
-      // Validate file
-      const validation = await this.validateFile(filePath);
-      if (!validation.valid) {
-        logger.warn(
-          {
-            filePath,
-            reason: validation.reason,
-          },
-          'File validation failed, skipping'
-        );
-        return;
-      }
+      // Enqueue job pointing at the staged copy. The inbox path is recorded
+      // so the worker can archive the original on success.
+      await this.createJobForFile(filePath, validation.metadata, contentSha, staged.workPath);
 
-      // Create transcription job
-      if (validation.metadata) {
-        await this.createJobForFile(filePath, validation.metadata);
-      }
-
-      // Mark as processed (both in-memory and persistent)
       this.processedFiles.add(filePath);
     } catch (error) {
-      logger.error(
-        {
-          error,
-          filePath,
-        },
-        'Error handling file'
-      );
+      logger.error({ error, filePath }, 'Error handling file');
     }
   }
 
@@ -309,16 +299,26 @@ export class FileWatcherService {
   // JOB CREATION
   // ===========================================================================
 
-  private async createJobForFile(filePath: string, metadata: FileMetadata): Promise<void> {
+  private async createJobForFile(
+    inboxPath: string,
+    metadata: FileMetadata,
+    contentSha: string,
+    workPath: string
+  ): Promise<void> {
     try {
       // Generate deterministic job ID based on file content/metadata
       // This prevents duplicate jobs for the exact same file
-      const jobId = this.generateJobId(filePath, metadata);
+      const jobId = this.generateJobId(inboxPath, metadata);
 
       const jobData: Partial<TranscriptionJob> = {
         id: jobId,
         fileName: metadata.fileName,
-        filePath,
+        // filePath is the WORK path — what the worker actually reads from.
+        // originalInboxPath is preserved so we can archive it on success.
+        filePath: workPath,
+        contentSha,
+        originalInboxPath: inboxPath,
+        workPath,
         fileSize: metadata.fileSize,
         mimeType: metadata.mimeType,
         status: JobStatus.PENDING,
@@ -328,7 +328,7 @@ export class FileWatcherService {
         attempts: 0,
         maxAttempts: appConfig.processing.maxAttempts,
         metadata: {
-          originalPath: filePath,
+          originalPath: inboxPath,
           audioFormat: metadata.extension,
           whisperModel: appConfig.whisper.model,
           language: appConfig.whisper.language,
@@ -344,7 +344,7 @@ export class FileWatcherService {
         // However, standard BullMQ behavior with jobId is to return the existing job.
 
         // Mark file as processed in persistent storage
-        await fileTracker.markProcessed(filePath, jobId);
+        await fileTracker.markProcessed(inboxPath, jobId);
 
         logger.info(
           {
@@ -364,7 +364,7 @@ export class FileWatcherService {
       logger.error(
         {
           error,
-          filePath,
+          inboxPath,
           fileName: metadata.fileName,
         },
         'Failed to create transcription job'

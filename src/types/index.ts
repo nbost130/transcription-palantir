@@ -34,6 +34,9 @@ export interface TranscriptionJob {
   id: string;
   fileName: string;
   filePath: string;
+  contentSha?: string;
+  originalInboxPath?: string;
+  workPath?: string;
   fileSize: number;
   mimeType: string;
   status: JobStatus;
@@ -195,6 +198,9 @@ export interface ProcessingConfig {
   outputDirectory: string;
   completedDirectory: string;
   failedDirectory: string;
+  workDirectory: string;
+  archiveDirectory: string;
+  duplicatesDirectory: string;
   maxFileSize: number;
   minFileSize: number;
   supportedFormats: string[];

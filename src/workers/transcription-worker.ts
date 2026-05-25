@@ -12,6 +12,7 @@ import { appConfig, getRedisUrl } from '../config/index.js';
 import { fasterWhisperService } from '../services/faster-whisper.js';
 import { fileTracker } from '../services/file-tracker.js';
 import { whisperService } from '../services/whisper.js';
+import { workManager } from '../services/work-manager.js';
 import { type ErrorCode, ErrorCodes, TranscriptionError, type TranscriptionJob } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { fileManager } from './file-manager.js';
@@ -158,7 +159,7 @@ export class TranscriptionWorker {
 
     logger.info('🔵 DEBUG: Setting up event listeners');
 
-    this.worker.on('completed', (job: Job) => {
+    this.worker.on('completed', async (job: Job) => {
       this.processedJobs++;
       logger.info(
         {
@@ -168,6 +169,18 @@ export class TranscriptionWorker {
         },
         '✅ Job completed successfully'
       );
+
+      // Phase 2: archive original inbox source out of the Syncthing-watched
+      // tree and clean up the per-job work dir. Idempotent — safe to retry.
+      const contentSha = job.data?.contentSha as string | undefined;
+      const originalInboxPath = job.data?.originalInboxPath as string | undefined;
+      if (contentSha) {
+        try {
+          await workManager.archiveOnSuccess(originalInboxPath, contentSha);
+        } catch (err) {
+          logger.error({ err, jobId: job.id, contentSha }, 'Failed to archive on success');
+        }
+      }
     });
 
     this.worker.on('failed', async (job: Job | undefined, error: Error) => {
@@ -182,10 +195,14 @@ export class TranscriptionWorker {
         '❌ Job failed'
       );
 
-      // Unmark file as processed so it can be retried
-      if (job?.data.filePath) {
-        await fileTracker.unmarkProcessed(job.data.filePath);
-        logger.debug({ filePath: job.data.filePath }, 'Unmarked failed file for retry');
+      // Unmark file as processed so it can be retried.
+      // Phase 2: markProcessed was keyed to originalInboxPath (Syncthing-side
+      // path), not to the workPath. We must unmark the SAME key or retries
+      // are silently broken — Gemini PR #38 blocker.
+      const pathToUnmark = (job?.data?.originalInboxPath as string | undefined) ?? job?.data.filePath;
+      if (pathToUnmark) {
+        await fileTracker.unmarkProcessed(pathToUnmark);
+        logger.debug({ pathToUnmark }, 'Unmarked failed file for retry');
       }
     });
 
@@ -253,7 +270,13 @@ export class TranscriptionWorker {
       await job.updateProgress(90);
 
       // Move completed file
-      await fileManager.moveCompletedFile(jobData.filePath);
+      // Phase 2: if workPath is set, the original inbox source has already
+      // been moved to archive/{YYYY-MM}/{sha}.{ext} by workManager.archiveOnSuccess()
+      // (fired from the 'completed' event listener). Calling moveCompletedFile()
+      // here would copy the work-tree source into completed/ — doubling storage.
+      if (!(jobData as { workPath?: string }).workPath) {
+        await fileManager.moveCompletedFile(jobData.filePath);
+      }
       await job.updateProgress(95);
 
       // Calculate processing time

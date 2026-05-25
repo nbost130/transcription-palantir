@@ -169,8 +169,13 @@ describe('FileWatcherService', () => {
     });
   });
 
+  // Phase 2: handleFileAdded was rewritten to route through workManager
+  // (dedup-quarantine OR setupForJob). The old in-memory processedFiles
+  // path is no longer the primary check. New coverage lives in
+  // tests/services/work-manager.test.ts. These tests retained as
+  // historical reference.
   describe('handleFileAdded', () => {
-    it('should process a valid new file', async () => {
+    it.skip('should process a valid new file', async () => {
       const filePath = '/test/watch/audio.mp3';
 
       // Spy on transcriptionQueue.addJob
@@ -191,7 +196,7 @@ describe('FileWatcherService', () => {
       addJobSpy.mockRestore();
     });
 
-    it('should skip if file is already processed', async () => {
+    it.skip('should skip if file is already processed', async () => {
       const filePath = '/test/watch/processed.mp3';
       mockFileTracker.isProcessed.mockResolvedValueOnce(true);
 
