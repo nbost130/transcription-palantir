@@ -11,8 +11,8 @@ import { Redis } from 'ioredis';
 import { appConfig, getRedisUrl } from '../config/index.js';
 import { fasterWhisperService } from '../services/faster-whisper.js';
 import { fileTracker } from '../services/file-tracker.js';
-import { workManager } from '../services/work-manager.js';
 import { whisperService } from '../services/whisper.js';
+import { workManager } from '../services/work-manager.js';
 import { type ErrorCode, ErrorCodes, TranscriptionError, type TranscriptionJob } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { fileManager } from './file-manager.js';
@@ -199,8 +199,7 @@ export class TranscriptionWorker {
       // Phase 2: markProcessed was keyed to originalInboxPath (Syncthing-side
       // path), not to the workPath. We must unmark the SAME key or retries
       // are silently broken — Gemini PR #38 blocker.
-      const pathToUnmark =
-        (job?.data?.originalInboxPath as string | undefined) ?? job?.data.filePath;
+      const pathToUnmark = (job?.data?.originalInboxPath as string | undefined) ?? job?.data.filePath;
       if (pathToUnmark) {
         await fileTracker.unmarkProcessed(pathToUnmark);
         logger.debug({ pathToUnmark }, 'Unmarked failed file for retry');

@@ -53,7 +53,7 @@ const EnvSchema = z.object({
   WORK_DIRECTORY: z.string().default('/var/lib/palantir/work'),
   ARCHIVE_DIRECTORY: z.string().default('/var/lib/palantir/archive'),
   DUPLICATES_DIRECTORY: z.string().default('/var/lib/palantir/duplicates'),
-    MAX_FILE_SIZE: z.coerce.number().default(500),
+  MAX_FILE_SIZE: z.coerce.number().default(500),
   MIN_FILE_SIZE: z.coerce.number().default(0.1),
   SUPPORTED_FORMATS: z.string().default('mp3,wav,m4a,flac,ogg,mp4,mov'),
 
@@ -122,7 +122,7 @@ function createConfig(): AppConfig {
       workDirectory: env.WORK_DIRECTORY,
       archiveDirectory: env.ARCHIVE_DIRECTORY,
       duplicatesDirectory: env.DUPLICATES_DIRECTORY,
-            maxFileSize: env.MAX_FILE_SIZE,
+      maxFileSize: env.MAX_FILE_SIZE,
       minFileSize: env.MIN_FILE_SIZE,
       supportedFormats: env.SUPPORTED_FORMATS.split(','),
       maxWorkers: env.MAX_WORKERS,

@@ -169,7 +169,6 @@ describe('FileWatcherService', () => {
     });
   });
 
-  
   // Phase 2: handleFileAdded was rewritten to route through workManager
   // (dedup-quarantine OR setupForJob). The old in-memory processedFiles
   // path is no longer the primary check. New coverage lives in

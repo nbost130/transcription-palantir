@@ -38,7 +38,7 @@ export interface WorkPaths {
 }
 
 export interface SetupResult {
-  workPath: string;   // /var/lib/palantir/work/{sha}/source.{ext}
+  workPath: string; // /var/lib/palantir/work/{sha}/source.{ext}
   workSha: string;
   workDirForJob: string; // /var/lib/palantir/work/{sha}
 }

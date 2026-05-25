@@ -13,8 +13,8 @@ import { JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js
 import { getMimeType } from '../utils/file.js';
 import { logger } from '../utils/logger.js';
 import { fileTracker } from './file-tracker.js';
-import { workManager } from './work-manager.js';
 import { transcriptionQueue } from './queue.js';
+import { workManager } from './work-manager.js';
 
 // =============================================================================
 // FILE WATCHER SERVICE
@@ -158,10 +158,7 @@ export class FileWatcherService {
       // Dedup against Redis. isProcessed() checks both path and content hash.
       const alreadyProcessed = await fileTracker.isProcessed(filePath);
       if (alreadyProcessed) {
-        logger.info(
-          { filePath, contentSha },
-          '♻️ Duplicate content detected — moving inbox file to duplicates/'
-        );
+        logger.info({ filePath, contentSha }, '♻️ Duplicate content detected — moving inbox file to duplicates/');
         try {
           await workManager.quarantineDuplicate(filePath, contentSha);
         } catch (err) {
@@ -302,7 +299,12 @@ export class FileWatcherService {
   // JOB CREATION
   // ===========================================================================
 
-  private async createJobForFile(inboxPath: string, metadata: FileMetadata, contentSha: string, workPath: string): Promise<void> {
+  private async createJobForFile(
+    inboxPath: string,
+    metadata: FileMetadata,
+    contentSha: string,
+    workPath: string
+  ): Promise<void> {
     try {
       // Generate deterministic job ID based on file content/metadata
       // This prevents duplicate jobs for the exact same file
