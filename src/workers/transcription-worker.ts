@@ -258,7 +258,15 @@ export class TranscriptionWorker {
       await job.updateProgress(20);
 
       // Generate output file path (preserving directory structure)
-      const outputPath = fileManager.generateOutputPath(jobData.filePath);
+      // Phase 2: jobData.filePath is the WORK tree path (e.g.,
+      // /var/lib/palantir/work/{sha}/source.ogg). FileManager derives the
+      // output path relative to the WATCH directory, so using filePath
+      // here means EVERY transcript collides on transcripts/source.json.
+      // Use originalInboxPath (the real Syncthing-side path) so the
+      // transcript preserves the inbox-relative naming.
+      const outputSourcePath =
+        ((jobData as { originalInboxPath?: string }).originalInboxPath) ?? jobData.filePath;
+      const outputPath = fileManager.generateOutputPath(outputSourcePath);
 
       // Run transcription
       await job.updateProgress(30);
