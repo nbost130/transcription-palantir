@@ -9,6 +9,7 @@ import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { appConfig } from '../../config/index.js';
 import { fasterWhisperService } from '../../services/faster-whisper.js';
 import { fileWatcher } from '../../services/file-watcher.js';
+import { metrics } from '../../services/metrics.js';
 import { transcriptionQueue } from '../../services/queue.js';
 import type { ServiceHealth, SystemHealth } from '../../types/index.js';
 
@@ -338,6 +339,28 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
         initialized,
         timestamp: new Date().toISOString(),
       };
+    }
+  );
+
+  // ---------------------------------------------------------------------------
+  // Dedup stats (Phase 2.5)
+  // ---------------------------------------------------------------------------
+  // Lives at /dedup-stats (not /metrics) because there's already a Prometheus
+  // /metrics endpoint exposing prom-client counters via metricsRoutes. Phase 3
+  // will fold these counters into the prom-client registry; for now this is a
+  // focused JSON endpoint so the dedup-saved KPI is at least observable.
+
+  fastify.get(
+    '/dedup-stats',
+    {
+      schema: {
+        description:
+          'Phase 2.5 in-process counters as JSON: dedupSaved, jobsStaged/Archived/Failed. Phase 3 will migrate these to the Prometheus /metrics endpoint.',
+        tags: ['health'],
+      },
+    },
+    async (_request, _reply) => {
+      return metrics.snapshot();
     }
   );
 }

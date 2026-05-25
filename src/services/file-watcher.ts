@@ -13,6 +13,7 @@ import { JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js
 import { getMimeType } from '../utils/file.js';
 import { logger } from '../utils/logger.js';
 import { fileTracker } from './file-tracker.js';
+import { metrics } from './metrics.js';
 import { transcriptionQueue } from './queue.js';
 import { workManager } from './work-manager.js';
 
@@ -161,6 +162,7 @@ export class FileWatcherService {
         logger.info({ filePath, contentSha }, '♻️ Duplicate content detected — moving inbox file to duplicates/');
         try {
           await workManager.quarantineDuplicate(filePath, contentSha);
+          metrics.incrementDedupSaved();
         } catch (err) {
           logger.error({ err, filePath, contentSha }, 'Failed to quarantine duplicate');
         }
@@ -171,6 +173,7 @@ export class FileWatcherService {
       // New content. Stage a private copy into the working tree.
       logger.info({ filePath, contentSha }, 'New file detected — staging into work tree');
       const staged = await workManager.setupForJob(filePath, contentSha);
+      metrics.incrementJobsStaged();
 
       // Enqueue job pointing at the staged copy. The inbox path is recorded
       // so the worker can archive the original on success.

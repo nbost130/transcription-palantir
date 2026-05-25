@@ -11,6 +11,7 @@ import { Redis } from 'ioredis';
 import { appConfig, getRedisUrl } from '../config/index.js';
 import { fasterWhisperService } from '../services/faster-whisper.js';
 import { fileTracker } from '../services/file-tracker.js';
+import { metrics } from '../services/metrics.js';
 import { whisperService } from '../services/whisper.js';
 import { workManager } from '../services/work-manager.js';
 import { type ErrorCode, ErrorCodes, TranscriptionError, type TranscriptionJob } from '../types/index.js';
@@ -177,6 +178,7 @@ export class TranscriptionWorker {
       if (contentSha) {
         try {
           await workManager.archiveOnSuccess(originalInboxPath, contentSha);
+          metrics.incrementJobsArchived();
         } catch (err) {
           logger.error({ err, jobId: job.id, contentSha }, 'Failed to archive on success');
         }
@@ -203,6 +205,19 @@ export class TranscriptionWorker {
       if (pathToUnmark) {
         await fileTracker.unmarkProcessed(pathToUnmark);
         logger.debug({ pathToUnmark }, 'Unmarked failed file for retry');
+      }
+
+      // Phase 2.5: on TERMINAL failure (all retries exhausted), clean up the
+      // work dir so failed jobs don't leak work/{sha}/ forever. We must NOT
+      // clean up on intermediate failures — the next retry needs the staged
+      // source. The inbox file is preserved either way (archiveOnSuccess
+      // never ran), so a manual re-drop or re-intake can recover.
+      const contentSha = job?.data?.contentSha as string | undefined;
+      const attemptsMade = job?.attemptsMade ?? 0;
+      const maxAttempts = (job?.opts?.attempts as number | undefined) ?? appConfig.processing.maxAttempts;
+      if (contentSha && attemptsMade >= maxAttempts) {
+        await workManager.cleanupAfterTerminalFailure(contentSha);
+        metrics.incrementJobsFailed();
       }
     });
 
@@ -258,7 +273,14 @@ export class TranscriptionWorker {
       await job.updateProgress(20);
 
       // Generate output file path (preserving directory structure)
-      const outputPath = fileManager.generateOutputPath(jobData.filePath);
+      // Phase 2: jobData.filePath is the WORK tree path (e.g.,
+      // /var/lib/palantir/work/{sha}/source.ogg). FileManager derives the
+      // output path relative to the WATCH directory, so using filePath
+      // here means EVERY transcript collides on transcripts/source.json.
+      // Use originalInboxPath (the real Syncthing-side path) so the
+      // transcript preserves the inbox-relative naming.
+      const outputSourcePath = (jobData as { originalInboxPath?: string }).originalInboxPath ?? jobData.filePath;
+      const outputPath = fileManager.generateOutputPath(outputSourcePath);
 
       // Run transcription
       await job.updateProgress(30);
