@@ -264,8 +264,7 @@ export class TranscriptionWorker {
       // here means EVERY transcript collides on transcripts/source.json.
       // Use originalInboxPath (the real Syncthing-side path) so the
       // transcript preserves the inbox-relative naming.
-      const outputSourcePath =
-        ((jobData as { originalInboxPath?: string }).originalInboxPath) ?? jobData.filePath;
+      const outputSourcePath = (jobData as { originalInboxPath?: string }).originalInboxPath ?? jobData.filePath;
       const outputPath = fileManager.generateOutputPath(outputSourcePath);
 
       // Run transcription
