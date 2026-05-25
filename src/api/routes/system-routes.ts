@@ -1,24 +1,18 @@
 import type { FastifyInstance } from 'fastify';
-import { appConfig } from '../../config/index.js';
-import { transcriptionQueue } from '../../services/queue.js';
-import { ReconciliationService } from '../../services/reconciliation.js';
+import { retentionService } from '../../services/retention.js';
 import { logger } from '../../utils/logger.js';
+
 export async function systemRoutes(fastify: FastifyInstance) {
-  // POST /system/reconcile
-  // Manually trigger reconciliation process
-  fastify.post('/system/reconcile', async (_request, reply) => {
-    logger.info('Manual reconciliation triggered via API');
-
+  // POST /system/cleanup
+  // Trigger a one-off retention pass on demand. Returns the structured
+  // RetentionReport so the caller sees what was deleted.
+  fastify.post('/system/cleanup', async (_request, reply) => {
+    logger.info('Manual retention cleanup triggered via API');
     try {
-      const service = new ReconciliationService(transcriptionQueue, appConfig);
-      const report = await service.reconcileOnBoot();
-
-      return {
-        success: true,
-        report,
-      };
+      const report = await retentionService.runOnce();
+      return { success: true, report };
     } catch (error) {
-      logger.error({ error }, 'Manual reconciliation failed');
+      logger.error({ error }, 'Manual retention cleanup failed');
       reply.code(500);
       return {
         success: false,

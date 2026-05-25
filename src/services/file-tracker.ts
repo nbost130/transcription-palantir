@@ -127,7 +127,7 @@ export class FileTrackerService {
         const fileHash = await this.getContentHash(filePath);
         await this.redis.hdel(REDIS_HASH_KEY, fileHash);
         logger.debug({ filePath, fileHash }, 'Unmarked file as processed (path + hash)');
-      } catch (hashError) {
+      } catch (_hashError) {
         logger.debug({ filePath }, 'Unmarked path key; file unavailable to compute hash for content-key deletion');
       }
     } catch (error) {

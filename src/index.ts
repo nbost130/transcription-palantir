@@ -4,13 +4,14 @@
  * Modern TypeScript transcription system with BullMQ, Redis, and Whisper.cpp
  */
 
+import cron from 'node-cron';
 import { apiServer } from './api/server.js';
 import { appConfig } from './config/index.js';
 import { fileTracker } from './services/file-tracker.js';
-
 import { fileWatcher } from './services/file-watcher.js';
 import { processGuard } from './services/process-guard.js';
 import { transcriptionQueue } from './services/queue.js';
+import { retentionService } from './services/retention.js';
 import { workManager } from './services/work-manager.js';
 import { logFatalError, logger } from './utils/logger.js';
 import { transcriptionWorker } from './workers/transcription-worker.js';
@@ -153,6 +154,17 @@ class TranscriptionPalantir {
 
     // Start file watcher
     await fileWatcher.start();
+
+    // Phase 3: schedule daily retention cleanup at 04:00.
+    // node-cron syntax: minute hour day-of-month month day-of-week
+    cron.schedule('0 4 * * *', async () => {
+      try {
+        await retentionService.runOnce();
+      } catch (err) {
+        logger.error({ err }, 'Scheduled retention cleanup failed');
+      }
+    });
+    logger.info('🧹 Daily retention cleanup scheduled (04:00)');
 
     // TODO: Start other components
     // - Metrics collection
