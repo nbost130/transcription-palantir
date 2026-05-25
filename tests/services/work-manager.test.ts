@@ -60,7 +60,10 @@ describe('WorkManagerService', () => {
     const result = await wm.setupForJob(inboxPath, SHA_A);
 
     expect(result.workSha).toBe(SHA_A);
-    expect(result.workPath).toBe(join(root, 'work', SHA_A, 'source.ogg'));
+    expect(result.workPath).toBe(join(root, 'work', SHA_A, 'session-1.ogg'));
+    // Phase 2.5: staging now preserves the SANITIZED original basename
+    // (not 'source.ogg'), so faster-whisper produces a unique output name
+    // per file instead of every transcript colliding on source.json.
 
     // Original inbox file is left in place (worker hasn't run yet)
     const inboxStillExists = await readFile(inboxPath);
@@ -142,5 +145,78 @@ describe('WorkManagerService', () => {
     const orphans = await wm.listOrphanedWorkDirs();
     expect(orphans).toContain(sha);
     expect(orphans).not.toContain('not-a-sha');
+  });
+
+  it('setupForJob preserves original basenames so two unique files in the same inbox subdir do not collide (Phase 2.5 regression)', async () => {
+    // The pre-Phase-2.5 bug: every file was staged as work/{sha}/source.{ext}.
+    // faster-whisper names its output after the input basename, so two files
+    // dropped into the same inbox subdir produced two transcripts both named
+    // source.json — second one silently clobbered the first.
+    // After Phase 2.5: each file is staged with its own sanitized basename,
+    // so transcripts also get unique names.
+
+    const subdir = join(inbox, 'session-day-A');
+    const { mkdir } = await import('node:fs/promises');
+    await mkdir(subdir, { recursive: true });
+
+    const fileA = join(subdir, 'recording-A.ogg');
+    const fileB = join(subdir, 'recording-B.ogg');
+    await writeFile(fileA, Buffer.from('audio-A-' + Date.now()));
+    await writeFile(fileB, Buffer.from('audio-B-' + Date.now()));
+
+    const shaA = 'a'.repeat(64);
+    const shaB = 'b'.repeat(64);
+
+    const resultA = await wm.setupForJob(fileA, shaA);
+    const resultB = await wm.setupForJob(fileB, shaB);
+
+    // Critical assertion: work-tree basenames must differ
+    const baseA = resultA.workPath.split('/').pop();
+    const baseB = resultB.workPath.split('/').pop();
+    expect(baseA).not.toBe(baseB);
+    expect(baseA).toBe('recording-A.ogg');
+    expect(baseB).toBe('recording-B.ogg');
+  });
+
+  it('setupForJob sanitises basenames with disallowed characters', async () => {
+    const subdir = join(inbox, 'sanitize-test');
+    const { mkdir } = await import('node:fs/promises');
+    await mkdir(subdir, { recursive: true });
+
+    const weirdName = join(subdir, 'Holy Spirit & The Believer (2024-04-12).ogg');
+    await writeFile(weirdName, Buffer.from('content-' + Date.now()));
+
+    const sha = 'c'.repeat(64);
+    const result = await wm.setupForJob(weirdName, sha);
+    const base = result.workPath.split('/').pop()!;
+
+    // No spaces, parens, or ampersands survive — must be filesystem-safe
+    expect(base).not.toMatch(/[ &()]/);
+    expect(base.endsWith('.ogg')).toBe(true);
+  });
+
+  it('cleanupAfterTerminalFailure removes the work dir for the given SHA', async () => {
+    const sha = 'd'.repeat(64);
+    const subdir = join(inbox, 'cleanup-test');
+    const { mkdir, readdir: rd } = await import('node:fs/promises');
+    await mkdir(subdir, { recursive: true });
+    const filePath = join(subdir, 'cleanup-me.ogg');
+    await writeFile(filePath, Buffer.from('cleanup-content'));
+
+    await wm.setupForJob(filePath, sha);
+    const workDirForJob = join(root, 'work', sha);
+    expect((await rd(workDirForJob)).length).toBeGreaterThan(0);
+
+    await wm.cleanupAfterTerminalFailure(sha);
+
+    // Work dir is gone (terminal failure)
+    await expect(rd(workDirForJob)).rejects.toThrow();
+    // Inbox file is preserved (we never moved it)
+    const { access: ac, constants: c } = await import('node:fs/promises');
+    await expect(ac(filePath, c.R_OK)).resolves.not.toThrow();
+  });
+
+  it('cleanupAfterTerminalFailure rejects malformed SHA', async () => {
+    await expect(wm.cleanupAfterTerminalFailure('nope')).rejects.toThrow(/Invalid SHA-256/);
   });
 });

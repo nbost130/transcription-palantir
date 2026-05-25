@@ -9,6 +9,7 @@ import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { appConfig } from '../../config/index.js';
 import { fasterWhisperService } from '../../services/faster-whisper.js';
 import { fileWatcher } from '../../services/file-watcher.js';
+import { metrics } from '../../services/metrics.js';
 import { transcriptionQueue } from '../../services/queue.js';
 import type { ServiceHealth, SystemHealth } from '../../types/index.js';
 
@@ -340,4 +341,22 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
       };
     }
   );
+
+  // ---------------------------------------------------------------------------
+  // Metrics (Phase 2.5)
+  // ---------------------------------------------------------------------------
+
+  fastify.get(
+    '/metrics',
+    {
+      schema: {
+        description: 'In-process counters: dedupSaved, jobsStaged/Archived/Failed. JSON snapshot, not Prometheus format (Phase 3 deliverable).',
+        tags: ['health'],
+      },
+    },
+    async (_request, _reply) => {
+      return metrics.snapshot();
+    }
+  );
+
 }

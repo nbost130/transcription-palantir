@@ -13,6 +13,7 @@ import { fasterWhisperService } from '../services/faster-whisper.js';
 import { fileTracker } from '../services/file-tracker.js';
 import { whisperService } from '../services/whisper.js';
 import { workManager } from '../services/work-manager.js';
+import { metrics } from '../services/metrics.js';
 import { type ErrorCode, ErrorCodes, TranscriptionError, type TranscriptionJob } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { fileManager } from './file-manager.js';
@@ -177,6 +178,7 @@ export class TranscriptionWorker {
       if (contentSha) {
         try {
           await workManager.archiveOnSuccess(originalInboxPath, contentSha);
+          metrics.incrementJobsArchived();
         } catch (err) {
           logger.error({ err, jobId: job.id, contentSha }, 'Failed to archive on success');
         }
@@ -203,6 +205,20 @@ export class TranscriptionWorker {
       if (pathToUnmark) {
         await fileTracker.unmarkProcessed(pathToUnmark);
         logger.debug({ pathToUnmark }, 'Unmarked failed file for retry');
+      }
+
+      // Phase 2.5: on TERMINAL failure (all retries exhausted), clean up the
+      // work dir so failed jobs don't leak work/{sha}/ forever. We must NOT
+      // clean up on intermediate failures — the next retry needs the staged
+      // source. The inbox file is preserved either way (archiveOnSuccess
+      // never ran), so a manual re-drop or re-intake can recover.
+      const contentSha = job?.data?.contentSha as string | undefined;
+      const attemptsMade = job?.attemptsMade ?? 0;
+      const maxAttempts =
+        (job?.opts?.attempts as number | undefined) ?? appConfig.processing.maxAttempts;
+      if (contentSha && attemptsMade >= maxAttempts) {
+        await workManager.cleanupAfterTerminalFailure(contentSha);
+        metrics.incrementJobsFailed();
       }
     });
 

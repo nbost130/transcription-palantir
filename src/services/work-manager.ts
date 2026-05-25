@@ -73,27 +73,52 @@ export class WorkManagerService {
 
     const ext = extname(inboxPath).toLowerCase() || '.bin';
     const workDirForJob = join(this.paths.workDir, sha);
-    const workPath = join(workDirForJob, `source${ext}`);
-
     await mkdir(workDirForJob, { recursive: true });
 
-    // Idempotent fast-path
-    try {
-      await access(workPath, constants.R_OK);
-      logger.debug({ sha, workPath }, 'Work staging already exists, reusing');
-      return { workPath, workSha: sha, workDirForJob };
-    } catch {
-      // Not staged yet — proceed
+    // Phase 2.5: stage with the SANITIZED ORIGINAL BASENAME (not the fixed
+    // name 'source.{ext}'). faster-whisper names its output after the input
+    // basename, so a fixed staging name caused every transcript to collide
+    // on source.json. Preserving the original basename means each transcript
+    // gets a unique, recognisable name.
+    const originalBase = basename(inboxPath, extname(inboxPath));
+    const safeBase = sanitiseBasename(originalBase) || sha.slice(0, 12);
+    const workPath = join(workDirForJob, `${safeBase}${ext}`);
+
+    // Idempotent fast-path: if a file already exists in work/{sha}/ (any name),
+    // return its path. setupForJob may run repeatedly across crashes/retries
+    // and we must never re-copy from a possibly-mutated inbox state.
+    const existing = await firstFileIn(workDirForJob);
+    if (existing) {
+      logger.debug({ sha, existing }, 'Work staging already exists, reusing');
+      return { workPath: existing, workSha: sha, workDirForJob };
     }
 
-    // Write to .tmp then rename (atomic-on-same-fs). Same-filesystem requirement
-    // satisfied because workDir is a single tree.
     const tmpPath = `${workPath}.tmp.${process.pid}`;
     await copyFile(inboxPath, tmpPath);
     await rename(tmpPath, workPath);
     logger.info({ sha, inboxPath, workPath }, '📥 Staged inbox file into working tree');
 
     return { workPath, workSha: sha, workDirForJob };
+  }
+
+  /**
+   * Phase 2.5: terminal-failure cleanup. Called by the worker when all
+   * BullMQ retry attempts are exhausted. Removes the per-job work dir
+   * so failed jobs don't leak storage forever. Inbox file is preserved
+   * (we never moved it — archiveOnSuccess only fires on success), so the
+   * source remains available for manual re-drop or inspection.
+   */
+  async cleanupAfterTerminalFailure(sha: string): Promise<void> {
+    if (!/^[0-9a-f]{64}$/.test(sha)) {
+      throw new Error(`Invalid SHA-256: ${sha}`);
+    }
+    const workDirForJob = join(this.paths.workDir, sha);
+    try {
+      await rm(workDirForJob, { recursive: true, force: true });
+      logger.info({ sha, workDirForJob }, '🧹 Cleaned up work dir after terminal failure');
+    } catch (err) {
+      logger.warn({ err, sha, workDirForJob }, 'Failed to clean up work dir after terminal failure');
+    }
   }
 
   /**
@@ -211,6 +236,26 @@ export class WorkManagerService {
   /** Paths accessor for tests / debugging. */
   getPaths(): WorkPaths {
     return { ...this.paths };
+  }
+}
+
+
+function sanitiseBasename(name: string): string {
+  // Allow alphanumerics, dash, underscore, dot. Replace everything else with _.
+  // Collapse runs of underscores. Empty after sanitisation falls back to SHA prefix.
+  return name
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^[._]+|[._]+$/g, '');
+}
+
+async function firstFileIn(dir: string): Promise<string | null> {
+  try {
+    const entries = await readdir(dir, { withFileTypes: true });
+    const file = entries.find((e) => e.isFile() && !e.name.endsWith('.tmp'));
+    return file ? join(dir, file.name) : null;
+  } catch {
+    return null;
   }
 }
 
