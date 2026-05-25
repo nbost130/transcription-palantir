@@ -29,7 +29,9 @@ export class FileManager {
     // Extract the relative path from the watch directory
     const watchDir = appConfig.processing.watchDirectory;
     const relativePath = filePath.startsWith(watchDir)
-      ? filePath.slice(watchDir.length).replace(/^\//, '') // Remove leading slash
+      ? filePath
+          .slice(watchDir.length)
+          .replace(/^\//, '') // Remove leading slash
       : basename(filePath); // Fallback to just filename if not in watch dir
 
     // Get the directory structure and filename
@@ -52,7 +54,9 @@ export class FileManager {
       // Extract the relative path from the watch directory to preserve structure
       const watchDir = appConfig.processing.watchDirectory;
       const relativePath = filePath.startsWith(watchDir)
-        ? filePath.slice(watchDir.length).replace(/^\//, '') // Remove leading slash
+        ? filePath
+            .slice(watchDir.length)
+            .replace(/^\//, '') // Remove leading slash
         : basename(filePath); // Fallback to just filename if not in watch dir
 
       // Get the directory structure and filename
@@ -81,7 +85,9 @@ export class FileManager {
       // Extract the relative path from the watch directory to preserve structure
       const watchDir = appConfig.processing.watchDirectory;
       const relativePath = filePath.startsWith(watchDir)
-        ? filePath.slice(watchDir.length).replace(/^\//, '') // Remove leading slash
+        ? filePath
+            .slice(watchDir.length)
+            .replace(/^\//, '') // Remove leading slash
         : basename(filePath); // Fallback to just filename if not in watch dir
 
       // Get the directory structure and filename

@@ -186,38 +186,6 @@ export class FileWatcherService {
   }
 
   // ===========================================================================
-  // SANITIZATION
-  // ===========================================================================
-
-  private async sanitizeFile(filePath: string): Promise<string> {
-    const dir = join(filePath, '..');
-    const ext = extname(filePath);
-    const name = basename(filePath, ext);
-
-    // Replace spaces with underscores, remove unsafe chars
-    const safeName = name
-      .replace(/\s+/g, '_') // Spaces to underscores
-      .replace(/[^a-zA-Z0-9\-_.]/g, '') // Remove non-alphanumeric (except -, _, and .)
-      .replace(/_+/g, '_'); // Dedupe underscores
-
-    const newFileName = `${safeName}${ext}`;
-    const newFilePath = join(dir, newFileName);
-
-    if (newFilePath !== filePath) {
-      try {
-        await import('node:fs/promises').then((fs) => fs.rename(filePath, newFilePath));
-        return newFilePath;
-      } catch (error) {
-        logger.error({ error, filePath, newFilePath }, 'Failed to rename file for sanitization');
-        // If rename fails, return original path and try to process as is
-        return filePath;
-      }
-    }
-
-    return filePath;
-  }
-
-  // ===========================================================================
   // FILE VALIDATION
   // ===========================================================================
 

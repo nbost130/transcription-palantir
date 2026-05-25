@@ -51,6 +51,34 @@ export const errorsTotal = new Counter({
   registers: [registry],
 });
 
+// Phase 3: Phase 2.5 counters folded into the prom-client registry. The
+// JSON-snapshot MetricsService is a thin facade over these — single source
+// of truth for /metrics scrapes.
+
+export const dedupSavedTotal = new Counter({
+  name: 'transcription_dedup_saved_total',
+  help: 'Number of inbox files moved to /duplicates/ because the content SHA was already processed. THE key signal of upstream-process regression.',
+  registers: [registry],
+});
+
+export const jobsStagedTotal = new Counter({
+  name: 'transcription_jobs_staged_total',
+  help: 'Number of new (non-duplicate) inbox files staged into the private working tree.',
+  registers: [registry],
+});
+
+export const jobsArchivedTotal = new Counter({
+  name: 'transcription_jobs_archived_total',
+  help: 'Number of jobs that transcribed successfully and archived their inbox source.',
+  registers: [registry],
+});
+
+export const jobsTerminalFailedTotal = new Counter({
+  name: 'transcription_jobs_terminal_failed_total',
+  help: 'Number of jobs that exhausted all retries and were terminally failed (work dir cleaned up, inbox source preserved for manual recovery).',
+  registers: [registry],
+});
+
 export async function getMetrics(): Promise<string> {
   return registry.metrics();
 }

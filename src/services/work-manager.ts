@@ -26,8 +26,8 @@
  */
 
 import { constants } from 'node:fs';
-import { access, copyFile, mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
-import { basename, dirname, extname, join } from 'node:path';
+import { access, copyFile, mkdir, readdir, rename, rm } from 'node:fs/promises';
+import { basename, extname, join } from 'node:path';
 import { appConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 
