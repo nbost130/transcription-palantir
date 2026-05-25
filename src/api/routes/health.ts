@@ -350,7 +350,8 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
     '/metrics',
     {
       schema: {
-        description: 'In-process counters: dedupSaved, jobsStaged/Archived/Failed. JSON snapshot, not Prometheus format (Phase 3 deliverable).',
+        description:
+          'In-process counters: dedupSaved, jobsStaged/Archived/Failed. JSON snapshot, not Prometheus format (Phase 3 deliverable).',
         tags: ['health'],
       },
     },
@@ -358,5 +359,4 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
       return metrics.snapshot();
     }
   );
-
 }

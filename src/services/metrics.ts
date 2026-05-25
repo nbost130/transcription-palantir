@@ -52,10 +52,12 @@ export class MetricsService {
     this.jobsFailed += by;
   }
   incrementDedupSaved(by = 1): void {
+    const previous = this.dedupSaved;
     this.dedupSaved += by;
-    // Log every 10th dedup hit at info level so even without dashboards,
-    // a sustained spike is visible in the log stream.
-    if (this.dedupSaved % 10 === 0) {
+    // Log on every 10-count threshold crossing, regardless of step size,
+    // so even without dashboards a sustained spike is visible in the log
+    // stream. Threshold-crossing math survives multi-increment calls.
+    if (Math.floor(previous / 10) < Math.floor(this.dedupSaved / 10)) {
       logger.info({ dedupSaved: this.dedupSaved }, '♻️ dedup_saved milestone');
     }
   }

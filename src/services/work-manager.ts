@@ -239,7 +239,6 @@ export class WorkManagerService {
   }
 }
 
-
 function sanitiseBasename(name: string): string {
   // Allow alphanumerics, dash, underscore, dot. Replace everything else with _.
   // Collapse runs of underscores. Empty after sanitisation falls back to SHA prefix.

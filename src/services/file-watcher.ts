@@ -13,9 +13,9 @@ import { JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js
 import { getMimeType } from '../utils/file.js';
 import { logger } from '../utils/logger.js';
 import { fileTracker } from './file-tracker.js';
+import { metrics } from './metrics.js';
 import { transcriptionQueue } from './queue.js';
 import { workManager } from './work-manager.js';
-import { metrics } from './metrics.js';
 
 // =============================================================================
 // FILE WATCHER SERVICE

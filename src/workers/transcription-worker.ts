@@ -11,9 +11,9 @@ import { Redis } from 'ioredis';
 import { appConfig, getRedisUrl } from '../config/index.js';
 import { fasterWhisperService } from '../services/faster-whisper.js';
 import { fileTracker } from '../services/file-tracker.js';
+import { metrics } from '../services/metrics.js';
 import { whisperService } from '../services/whisper.js';
 import { workManager } from '../services/work-manager.js';
-import { metrics } from '../services/metrics.js';
 import { type ErrorCode, ErrorCodes, TranscriptionError, type TranscriptionJob } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { fileManager } from './file-manager.js';
@@ -214,8 +214,7 @@ export class TranscriptionWorker {
       // never ran), so a manual re-drop or re-intake can recover.
       const contentSha = job?.data?.contentSha as string | undefined;
       const attemptsMade = job?.attemptsMade ?? 0;
-      const maxAttempts =
-        (job?.opts?.attempts as number | undefined) ?? appConfig.processing.maxAttempts;
+      const maxAttempts = (job?.opts?.attempts as number | undefined) ?? appConfig.processing.maxAttempts;
       if (contentSha && attemptsMade >= maxAttempts) {
         await workManager.cleanupAfterTerminalFailure(contentSha);
         metrics.incrementJobsFailed();
