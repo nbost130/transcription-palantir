@@ -9,6 +9,7 @@ import { Redis } from 'ioredis';
 import { appConfig, getRedisUrl } from '../config/index.js';
 import { JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js';
 import { logQueueEvent, queueLogger } from '../utils/logger.js';
+import { redisRetryStrategy } from './redis-retry.js';
 
 // =============================================================================
 // REDIS CONNECTION
@@ -30,21 +31,12 @@ const redisConnection = new Redis(getRedisUrl(), {
   enableOfflineQueue: appConfig.redis.enableOfflineQueue,
 
   /**
-   * Retry strategy with exponential backoff
-   * @param times - Number of reconnection attempts
-   * @returns Delay in milliseconds before next retry, or null to stop retrying
+   * Retry strategy: always reconnect with capped backoff, NEVER give up.
+   * A permanently-dead connection (the old `return null` after maxRetries=3)
+   * was the root cause of every queue READ throwing 500 after the process ran
+   * long enough to hit one transient Redis blip. See ./redis-retry.ts.
    */
-  retryStrategy(times: number): number | null {
-    if (times > appConfig.redis.maxRetries) {
-      queueLogger.error({ attempts: times }, 'Max Redis connection retries exceeded, giving up');
-      return null; // Stop retrying
-    }
-
-    // Exponential backoff: min(times * 50, 2000)ms
-    const delay = Math.min(times * 50, 2000);
-    queueLogger.warn({ attempt: times, delayMs: delay }, 'Redis connection failed, retrying...');
-    return delay;
-  },
+  retryStrategy: redisRetryStrategy,
 
   /**
    * Reconnect on specific transient errors
