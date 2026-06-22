@@ -320,3 +320,19 @@ On Mithrandir, Docker container network changes trigger Tailscale DNS reconfigur
 - `docs/reports/` - Incident reports and post-mortems
 - `.github/workflows/` - GitHub Actions workflow definitions
 
+
+## Architecture & Hardware Constraints
+
+### Whisper Transcription Pipeline
+
+- **Stack:** faster-whisper 1.1.1 + CTranslate2 4.6.0 (NOT torch / openai-whisper; torch is not installed).
+- **Python venv:** `/home/nbost/faster-whisper-env`.
+- **Runtime:** supervised by the **systemd user unit** `transcription-palantir.service` (`~/.config/systemd/user/transcription-palantir.service`) -- confirmed first-hand via cgroup + parent chain. Enabled and `active (running)`; `Restart=on-failure` (`RestartSec=10`); user lingering is ON (`loginctl ... Linger=yes`), so it starts at boot without login. ExecStart runs `bun run dist/index.js` from the repo, loads `.env`, listens on port 9003. NOT Docker, NOT pm2, NOT cron. (A separate disabled system-scope unit `/etc/systemd/system/transcription.service` points at an OLD `transcription-ts` dir -- not this service.)
+
+### HARDWARE CONSTRAINT (load-bearing)
+
+**Mithrandir has NO NVIDIA GPU.** It has an Intel Iris Xe iGPU only: no NVIDIA driver, no CUDA toolkit (`nvidia-smi` / `nvcc` absent, no nvidia kernel module). Whisper runs **CPU int8 by design** -- this is the correct, intentional target, not a degraded fallback.
+
+**Never set `device=cuda` or `computeType=float16` on this host.** CUDA init will fail (`CUDA driver version is insufficient...`) and silently fall back to CPU anyway, so the change buys nothing and only adds a startup error. There is no GPU speed to recover here; GPU acceleration would require new physical NVIDIA hardware plus a driver install. Do not "fix" the pipeline back to CUDA.
+
+The device/compute-type defaults are documented inline at `src/services/faster-whisper.ts` (device default) and `src/workers/transcription-worker.ts` (computeType: int8).

@@ -404,6 +404,7 @@ export class TranscriptionWorker {
       const result = await fasterWhisperService.transcribe(inputPath, outputDir, {
         model: 'medium',
         device: 'cpu',
+        // int8/CPU is intentional -- Mithrandir is GPU-less (Intel Iris Xe only). See CLAUDE.md. Do not switch to float16/cuda.
         computeType: 'int8', // int8 for CPU compatibility (float16 requires GPU)
         beamSize: 5,
         vadFilter: false, // Disable VAD for now (can enable later)

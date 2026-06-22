@@ -84,6 +84,12 @@ export class FasterWhisperService {
         inputFile,
         outputFile,
         model: options.model || 'large-v3',
+        // Mithrandir has NO NVIDIA GPU -- Intel Iris Xe iGPU only (no driver, no CUDA toolkit).
+        // CPU int8 is intentional and correct here, NOT a degraded fallback.
+        // Do NOT switch device to 'cuda' or computeType to 'float16': CUDA init will
+        // fail ('CUDA driver version is insufficient...') and silently fall back to CPU
+        // anyway. GPU acceleration would require physical NVIDIA hardware + a driver install.
+        // See repo CLAUDE.md.
         device: options.device || 'cpu',
       },
       'Starting faster-whisper transcription'
