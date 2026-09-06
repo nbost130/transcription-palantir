@@ -84,7 +84,7 @@ export const getJobSchema = {
       type: 'object',
       properties: {
         success: { type: 'boolean' },
-        data: { type: 'object' },
+        data: { type: 'object', additionalProperties: true },
         timestamp: { type: 'string' },
         requestId: { type: 'string' },
       },
@@ -128,7 +128,7 @@ export const updateJobSchema = {
       type: 'object',
       properties: {
         success: { type: 'boolean' },
-        data: { type: 'object' },
+        data: { type: 'object', additionalProperties: true },
         timestamp: { type: 'string' },
         requestId: { type: 'string' },
       },
@@ -187,7 +187,7 @@ export const deleteJobSchema = {
       type: 'object',
       properties: {
         success: { type: 'boolean' },
-        data: { type: 'object' },
+        data: { type: 'object', additionalProperties: true },
         timestamp: { type: 'string' },
         requestId: { type: 'string' },
       },
@@ -210,7 +210,7 @@ export const retryJobSchema = {
       type: 'object',
       properties: {
         success: { type: 'boolean' },
-        data: { type: 'object' },
+        data: { type: 'object', additionalProperties: true },
         timestamp: { type: 'string' },
         requestId: { type: 'string' },
       },
@@ -272,7 +272,7 @@ export const cleanFailedJobsSchema = {
       type: 'object',
       properties: {
         success: { type: 'boolean' },
-        data: { type: 'object' },
+        data: { type: 'object', additionalProperties: true },
         timestamp: { type: 'string' },
         requestId: { type: 'string' },
       },
