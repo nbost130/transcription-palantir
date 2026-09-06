@@ -15,6 +15,14 @@ const loggerConfig: pino.LoggerOptions = {
   level: appConfig.logLevel,
   name: appConfig.serviceName,
 
+  // Serialize any `err` field with pino's standard error serializer so
+  // `message`/`stack`/`type`/`code` always come through, instead of the
+  // hand-built `{ error: { message, stack, ... } }` shape that logged as
+  // `"error":{}` whenever the thrown value wasn't a real Error.
+  serializers: {
+    err: pino.stdSerializers.err,
+  },
+
   // Development-friendly formatting
   ...(appConfig.env === 'development' && {
     transport: {
