@@ -5,6 +5,7 @@
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { recordResponse } from '../../services/request-stats.js';
 import { logger } from '../../utils/logger.js';
 
 // =============================================================================
@@ -43,5 +44,13 @@ export async function requestLogger(request: FastifyRequest, reply: FastifyReply
       },
       'Request completed'
     );
+
+    // Feed the rolling-window readiness signal. Guarded so a bug here can
+    // never turn a successfully-served response into a broken one.
+    try {
+      recordResponse(reply.statusCode);
+    } catch (err) {
+      logger.warn({ err }, 'Failed to record response stats');
+    }
   });
 }
