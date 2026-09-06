@@ -67,33 +67,59 @@ jobs:
           echo "🔨 Building project..."
           npm run build
 
-          echo "🧹 Cleaning up orphaned processes..."
-          # Kill any orphaned processes that might be blocking port 9003
-          pkill -f 'transcription-palantir/dist/index.js' || true
-          sleep 2
-
           echo "🔄 Restarting service..."
+          # No manual pkill here: the unit has KillMode=control-group and
+          # ExecStopPost=fuser -k 9003/tcp for orphans, and a pkill immediately
+          # before restart raced systemd's Restart=on-failure/RestartSec=10,
+          # leaving the unit "activating" when the old single is-active check
+          # ran (2026-06-15, 2026-06-22 deploy failures, exit 3 five seconds in).
           systemctl --user restart transcription-palantir
 
-          echo "⏳ Waiting for service to start..."
-          sleep 5
-
-          echo "🔍 Verifying service is running..."
-          # Check systemd service is actually active
-          if ! systemctl --user is-active --quiet transcription-palantir; then
-            echo "❌ Service failed to start"
+          echo "🔍 Waiting for service to become active..."
+          ACTIVE_OK=""
+          for i in $(seq 1 15); do
+            if systemctl --user is-active --quiet transcription-palantir; then
+              ACTIVE_OK="1"
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "$ACTIVE_OK" ]; then
+            echo "❌ Service did not become active within 30s"
             systemctl --user status transcription-palantir --no-pager -l
+            tail -50 logs/service.log || true
             exit 1
           fi
+          echo "✅ Service is active"
 
-          echo "✅ Verifying deployment health..."
-          # Check health endpoint responds
-          curl -f http://localhost:9003/api/v1/health || exit 1
+          echo "✅ Verifying deployment readiness..."
+          # Poll the deep readiness probe (not /api/v1/health, which is liveness-only
+          # and stayed green through the 2026-08-28..09-06 rate-limiter incident).
+          READY_OK=""
+          for i in $(seq 1 15); do
+            READY_CODE=$(curl -s -o /tmp/ready-body.json -w '%{http_code}' http://localhost:9003/api/v1/ready)
+            if [ "$READY_CODE" = "200" ]; then
+              READY_OK="1"
+              break
+            fi
+            sleep 2
+          done
+          if [ -z "$READY_OK" ]; then
+            echo "❌ /api/v1/ready did not return 200 within 30s (last: $READY_CODE)"
+            echo "Last response body:"
+            cat /tmp/ready-body.json 2>/dev/null || true
+            systemctl --user status transcription-palantir --no-pager -l || true
+            tail -50 logs/service.log || true
+            exit 1
+          fi
+          echo "✅ Service is ready"
 
           echo "🕐 Verifying fresh deployment..."
-          # Verify uptime is recent (less than 60 seconds = fresh restart)
-          UPTIME=$(curl -s http://localhost:9003/api/v1/health | jq -r '.uptime')
-          if (( $(echo "$UPTIME > 60" | bc -l) )); then
+          # Verify uptime is recent (less than 60 seconds = fresh restart).
+          # uptime still comes from /api/v1/health (liveness) - that field is unchanged.
+          HEALTH_BODY=$(curl -s http://localhost:9003/api/v1/health)
+          UPTIME=$(echo "$HEALTH_BODY" | jq -r '.uptime')
+          if ! echo "$HEALTH_BODY" | jq -e '.uptime < 60' >/dev/null 2>&1; then
             echo "⚠️  WARNING: Service appears stale (uptime: ${UPTIME}s)"
             echo "This might indicate the restart failed and old instance is still running"
             exit 1
@@ -107,15 +133,15 @@ jobs:
       run: |
         # Wait a bit more for full startup
         sleep 3
-        
-        # Check health endpoint
-        HEALTH=$(curl -s http://100.77.230.53:9003/api/v1/health | jq -r '.status')
-        if [ "$HEALTH" != "ok" ]; then
-          echo "❌ Health check failed: $HEALTH"
+
+        # Check readiness (not just liveness) from outside the tailnet host itself
+        READY=$(curl -s http://100.77.230.53:9003/api/v1/ready | jq -r '.status')
+        if [ "$READY" != "ready" ]; then
+          echo "❌ Readiness check failed: $READY"
           exit 1
         fi
-        
-        echo "✅ Deployment verified - service is healthy"
+
+        echo "✅ Deployment verified - service is ready"
         
     - name: 📊 Deployment summary
       if: always()
