@@ -253,3 +253,27 @@ describe('rate limiting + error handling', () => {
     await app.close();
   });
 });
+
+describe('X-Forwarded-For cannot buy a place on the allowList (Anti-3)', () => {
+  it('a public client claiming 127.0.0.1 via the header is still rate limited when trustProxy is off', async () => {
+    // Mirrors src/api/server.ts: trustProxy is false there for exactly this reason.
+    const app = Fastify({ logger: false, disableRequestLogging: true, trustProxy: false });
+    await app.register(rateLimit, buildRateLimitOptions({ max: 2, timeWindow: 60_000 }));
+    app.setErrorHandler(errorHandler);
+    app.get('/x', async () => ({ ok: true }));
+    await app.ready();
+
+    const codes: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      const res = await app.inject({
+        method: 'GET',
+        url: '/x',
+        remoteAddress: '203.0.113.9',
+        headers: { 'x-forwarded-for': '127.0.0.1' },
+      });
+      codes.push(res.statusCode);
+    }
+    expect(codes).toEqual([200, 200, 429, 429]);
+    await app.close();
+  });
+});

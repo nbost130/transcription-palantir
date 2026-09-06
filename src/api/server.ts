@@ -44,7 +44,10 @@ export class ApiServer {
   private createServer(): FastifyInstance {
     const opts: FastifyServerOptions = {
       logger: false, // Use custom Pino logger
-      trustProxy: true,
+      // Nothing proxies this service. With trustProxy: true, `request.ip`
+      // comes from X-Forwarded-For, so any client could claim 127.0.0.1 and
+      // skip the rate limiter's allowList (proven in review, 2026-09-06).
+      trustProxy: false,
       requestIdHeader: 'x-request-id',
       requestIdLogLabel: 'requestId',
       disableRequestLogging: true, // Use custom request logger

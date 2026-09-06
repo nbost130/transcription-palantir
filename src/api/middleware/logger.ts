@@ -46,7 +46,9 @@ export async function requestLogger(request: FastifyRequest, reply: FastifyReply
   );
 
   // Log response when finished
+  let finished = false;
   reply.raw.on('finish', () => {
+    finished = true;
     const duration = Date.now() - startTime;
 
     logger.info(
@@ -63,11 +65,24 @@ export async function requestLogger(request: FastifyRequest, reply: FastifyReply
     // Feed the rolling-window readiness signal. Guarded so a bug here can
     // never turn a successfully-served response into a broken one.
     if (!isProbeUrl(request.url)) {
-      try {
-        recordResponse(reply.statusCode);
-      } catch (err) {
-        logger.warn({ err }, 'Failed to record response stats');
-      }
+      safeRecord(reply.statusCode);
     }
   });
+
+  // A request that never finished (client aborted, or the server wedged)
+  // would otherwise leave no sample at all, and a window with no samples
+  // reads as healthy. Record it as 499 so a hung service degrades readiness.
+  reply.raw.on('close', () => {
+    if (!finished && !isProbeUrl(request.url)) {
+      safeRecord(499);
+    }
+  });
+}
+
+function safeRecord(statusCode: number): void {
+  try {
+    recordResponse(statusCode);
+  } catch (err) {
+    logger.warn({ err }, 'Failed to record response stats');
+  }
 }

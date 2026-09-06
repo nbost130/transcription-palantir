@@ -83,7 +83,7 @@ fi
 BURST_LOG="$TMP/burst-codes.txt"
 : > "$BURST_LOG"
 for _ in $(seq 1 150); do
-  curl -s -o /dev/null -w '%{http_code}\n' "$API_URL/api/v1/jobs?limit=1" >> "$BURST_LOG"
+  curl -s --max-time 10 -o /dev/null -w '%{http_code}\n' "$API_URL/api/v1/jobs?limit=1" >> "$BURST_LOG" || echo 000 >> "$BURST_LOG"
 done
 NON200_COUNT=$(grep -vc '^200$' "$BURST_LOG" || true)
 if [ "$NON200_COUNT" -eq 0 ]; then

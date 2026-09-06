@@ -19,8 +19,12 @@ const loggerConfig: pino.LoggerOptions = {
   // `message`/`stack`/`type`/`code` always come through, instead of the
   // hand-built `{ error: { message, stack, ... } }` shape that logged as
   // `"error":{}` whenever the thrown value wasn't a real Error.
+  // `error` is included too: ~48 call sites log `{ error }` and a real
+  // Error under an unserialized key stringifies to `{}` (message/stack are
+  // non-enumerable) — the exact signature of the 2026-09 incident.
   serializers: {
     err: pino.stdSerializers.err,
+    error: pino.stdSerializers.err,
   },
 
   // Development-friendly formatting

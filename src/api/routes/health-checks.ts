@@ -38,6 +38,8 @@ export interface CheckResult {
 export const READY_TIMEOUTS = {
   redisPingMs: 1_000,
   queueMs: 2_000,
+  /** fs.access on a network mount can block indefinitely; bound it. */
+  fsMs: 500,
 };
 
 // =============================================================================
@@ -45,11 +47,17 @@ export const READY_TIMEOUTS = {
 // =============================================================================
 
 export async function checkDirectoryAccess(dirPath: string): Promise<boolean> {
+  return (await directoryAccess(dirPath)).ok;
+}
+
+/** Like checkDirectoryAccess, but says why (errno code) and never blocks past READY_TIMEOUTS.fsMs. */
+export async function directoryAccess(dirPath: string): Promise<{ ok: boolean; reason?: string }> {
   try {
-    await access(dirPath, constants.R_OK | constants.W_OK);
-    return true;
-  } catch {
-    return false;
+    await withTimeout(access(dirPath, constants.R_OK | constants.W_OK), READY_TIMEOUTS.fsMs, `access ${dirPath}`);
+    return { ok: true };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code;
+    return { ok: false, reason: code ?? errorMessage(error) };
   }
 }
 
@@ -144,8 +152,12 @@ export function checkWorker(): CheckResult {
 /** Soft check: whisper binary availability never affects the HTTP status. */
 export async function checkWhisper(): Promise<CheckResult> {
   try {
-    const { available, path } = await fasterWhisperService.checkBinaryAvailability();
-    return { status: available ? 'up' : 'down', path };
+    const { available, path } = await withTimeout(
+      fasterWhisperService.checkBinaryAvailability(),
+      READY_TIMEOUTS.fsMs,
+      'whisper binary check'
+    );
+    return available ? { status: 'up', path } : { status: 'down', path, error: `not executable: ${path}` };
   } catch (error) {
     return { status: 'down', error: errorMessage(error) };
   }
@@ -158,8 +170,16 @@ export async function checkWhisper(): Promise<CheckResult> {
 export async function checkFileWatcher(): Promise<CheckResult> {
   try {
     const running = fileWatcher.running;
-    const directoryAccessible = await checkDirectoryAccess(appConfig.processing.watchDirectory);
-    return { status: running && directoryAccessible ? 'up' : 'down', running, directoryAccessible };
+    const dir = await directoryAccess(appConfig.processing.watchDirectory);
+    const directoryAccessible = dir.ok;
+    const result: CheckResult = {
+      status: running && directoryAccessible ? 'up' : 'down',
+      running,
+      directoryAccessible,
+    };
+    if (!running) result.error = 'file watcher not running';
+    else if (!directoryAccessible) result.error = `watch directory: ${dir.reason}`;
+    return result;
   } catch (error) {
     return { status: 'down', error: errorMessage(error) };
   }

@@ -17,6 +17,7 @@ build/
 .env.staging
 .env.production
 .env.test
+.env.bak*
 
 # Logs
 logs/

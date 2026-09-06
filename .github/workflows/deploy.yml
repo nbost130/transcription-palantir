@@ -97,7 +97,7 @@ jobs:
           # and stayed green through the 2026-08-28..09-06 rate-limiter incident).
           READY_OK=""
           for i in $(seq 1 15); do
-            READY_CODE=$(curl -s -o /tmp/ready-body.json -w '%{http_code}' http://localhost:9003/api/v1/ready)
+            READY_CODE=$(curl -s --max-time 5 -o /tmp/ready-body.json -w '%{http_code}' http://localhost:9003/api/v1/ready || echo 000)
             if [ "$READY_CODE" = "200" ]; then
               READY_OK="1"
               break
@@ -117,9 +117,9 @@ jobs:
           echo "🕐 Verifying fresh deployment..."
           # Verify uptime is recent (less than 60 seconds = fresh restart).
           # uptime still comes from /api/v1/health (liveness) - that field is unchanged.
-          HEALTH_BODY=$(curl -s http://localhost:9003/api/v1/health)
+          HEALTH_BODY=$(curl -s --max-time 5 http://localhost:9003/api/v1/health || echo '{}')
           UPTIME=$(echo "$HEALTH_BODY" | jq -r '.uptime')
-          if ! echo "$HEALTH_BODY" | jq -e '.uptime < 60' >/dev/null 2>&1; then
+          if ! echo "$HEALTH_BODY" | jq -e 'has("uptime") and .uptime < 60' >/dev/null 2>&1; then
             echo "⚠️  WARNING: Service appears stale (uptime: ${UPTIME}s)"
             echo "This might indicate the restart failed and old instance is still running"
             exit 1
