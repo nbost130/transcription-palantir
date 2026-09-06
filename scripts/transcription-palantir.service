@@ -22,7 +22,11 @@ TimeoutStopSec=15
 ExecStopPost=/usr/bin/fuser -k 9003/tcp
 
 # Restart policy
-Restart=on-failure
+# always, not on-failure: a self-initiated shutdown (lost singleton lock,
+# hung component under the 90 s deadline) must come back without a human.
+# `systemctl --user stop` still stops it for good — systemd never restarts
+# after an explicit stop.
+Restart=always
 RestartSec=10
 
 StandardOutput=append:/home/nbost/transcription-palantir/logs/service.log

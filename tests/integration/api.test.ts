@@ -10,9 +10,9 @@
  * Tests the Fastify API server endpoints with mocked dependencies
  */
 
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { apiServer } from '../../src/api/server.js';
 import { appConfig } from '../../src/config/index.js';
@@ -84,36 +84,36 @@ describe('API Integration Tests', () => {
     expect(data).toHaveProperty('metrics');
   });
 
-  test('POST /jobs should create a new job (with error for non-existent file)', async () => {
-    const _response = await fetch(`${BASE_URL}/api/v1/jobs`, {
+  test('POST /jobs then GET /jobs/:jobId returns the same job with its fields (not an empty object)', async () => {
+    // Regression: the getJob response schema declared `data: { type: 'object' }`
+    // with no properties, and fast-json-stringify serialised every job as `{}`.
+    const audio = join(TEST_WATCH_DIR, `lookup-${Date.now()}.wav`);
+    await writeFile(audio, Buffer.alloc(2048, 1));
+
+    const created = await fetch(`${BASE_URL}/api/v1/jobs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        filePath: '/tmp/test.mp3',
-        priority: 3,
-      }),
+      body: JSON.stringify({ filePath: audio, priority: 4 }),
     });
+    const createdBody = await created.json();
+    expect(created.status).toBe(201);
+    const jobId: string = createdBody.data.jobId;
+    expect(jobId).toMatch(/^[0-9a-f-]{36}$/);
 
-    // Expect 400 because file doesn't exist (validation)
-    // Or 201 if validation is mocked/skipped.
-    // In real integration, it should probably fail validation if file doesn't exist.
-    // But let's see what origin/main expects.
-    // origin/main code had:
-    // expect(response.status).toBe(201);
-    // expect(data.success).toBe(true);
-    // expect(data.data.jobId).toBe('job-123');
-    // Wait, if file doesn't exist, how can it be 201?
-    // Maybe validation is skipped in test env?
-    // Or maybe it mocks the file check?
-    // Ah, I see `mockFileWatcher` in HEAD but not in origin/main.
-    // If I use origin/main, it uses real services.
-    // `fileManager.validateInputFile` checks for file existence.
-    // So `/tmp/test.mp3` must exist.
-    // But I don't see where it's created in origin/main's `beforeAll`.
-    // HEAD created it: `await Bun.write('/tmp/test.mp3', 'dummy content');`
-    // origin/main didn't create it.
-    // So `POST /jobs` will likely fail with 400 or 404.
-    // I should create the file in `beforeAll`.
+    const fetched = await fetch(`${BASE_URL}/api/v1/jobs/${jobId}`);
+    const body = await fetched.json();
+    expect(fetched.status).toBe(200);
+    expect(body.success).toBe(true);
+    expect(body.data.jobId).toBe(jobId);
+    expect(body.data.status).toBeDefined();
+    expect(body.data.data.fileName).toBe(basename(audio));
+    expect(Object.keys(body.data).length).toBeGreaterThan(5);
+
+    const missing = await fetch(`${BASE_URL}/api/v1/jobs/does-not-exist-${Date.now()}`);
+    expect(missing.status).toBe(404);
+    expect((await missing.json()).success).toBe(false);
+
+    await fetch(`${BASE_URL}/api/v1/jobs/${jobId}`, { method: 'DELETE' });
   });
 
   test('GET /jobs should return list of jobs', async () => {

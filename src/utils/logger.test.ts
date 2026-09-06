@@ -99,11 +99,17 @@ describe('Logger Utility', () => {
   });
 
   describe('createTimer', () => {
-    it('should measure duration', async () => {
-      const timer = createTimer('test-timer');
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      const duration = timer.end();
-      expect(duration).toBeGreaterThanOrEqual(10);
+    it('should measure duration', () => {
+      // Fake clock: a real 10 ms setTimeout can fire at 9 ms of Date.now()
+      // resolution and made this flake under a loaded machine.
+      vi.useFakeTimers();
+      try {
+        const timer = createTimer('test-timer');
+        vi.advanceTimersByTime(10);
+        expect(timer.end()).toBe(10);
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });
