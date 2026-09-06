@@ -8,7 +8,7 @@
  */
 
 import { Redis as IORedis } from 'ioredis';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRedisUrl } from '../../src/config/index.js';
 import { ProcessGuardService } from '../../src/services/process-guard.js';
 
@@ -68,5 +68,40 @@ describe.skipIf(skipIfNoRedis)('ProcessGuardService - Redis singleton lock', () 
   it('release is idempotent and safe to call when not acquired', async () => {
     const guard = new ProcessGuardService();
     await expect(guard.release()).resolves.not.toThrow();
+  });
+
+  it('heartbeat keeps a lock we still own and refreshes its TTL', async () => {
+    const guard = new ProcessGuardService();
+    expect(await guard.acquire()).toBe(true);
+    await helper.pexpire(LOCK_KEY, 500);
+    expect(await guard.refreshOnce()).toBe('kept');
+    expect(await helper.pttl(LOCK_KEY)).toBeGreaterThan(500);
+    await guard.release();
+  });
+
+  it('an EXPIRED lock (nobody else holds it) is re-acquired, not treated as stolen', async () => {
+    const onLost = vi.fn();
+    const guard = new ProcessGuardService({ onLost });
+    expect(await guard.acquire()).toBe(true);
+    // Simulate a stall longer than the TTL: the key is gone, no one took it.
+    await helper.del(LOCK_KEY);
+    expect(await guard.refreshOnce()).toBe('reacquired');
+    expect(await helper.get(LOCK_KEY)).toBe(guard.lockToken);
+    expect(onLost).not.toHaveBeenCalled();
+    await guard.release();
+    expect(await helper.get(LOCK_KEY)).toBeNull();
+  });
+
+  it('a lock held by ANOTHER instance is reported lost and triggers onLost', async () => {
+    const onLost = vi.fn();
+    const guard = new ProcessGuardService({ onLost });
+    expect(await guard.acquire()).toBe(true);
+    await helper.set(LOCK_KEY, 'intruder-token', 'PX', 60_000);
+    expect(await guard.refreshOnce()).toBe('lost');
+    expect(await helper.get(LOCK_KEY)).toBe('intruder-token');
+    // release() must not delete a lock we do not own.
+    await guard.release();
+    expect(await helper.get(LOCK_KEY)).toBe('intruder-token');
+    await helper.del(LOCK_KEY);
   });
 });

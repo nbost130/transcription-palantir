@@ -44,18 +44,36 @@ else
 end
 `;
 
+export type RefreshOutcome = 'kept' | 'reacquired' | 'lost';
+
+export interface ProcessGuardOptions {
+  /**
+   * Called when the lock is held by ANOTHER instance. Default: SIGTERM
+   * ourselves so index.ts runs its graceful shutdown (under the hard
+   * deadline in utils/shutdown-deadline.ts). Injectable for tests.
+   */
+  onLost?: () => void;
+}
+
 export class ProcessGuardService {
   private redis: Redis;
   private token: string;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private acquired = false;
+  private readonly onLost: () => void;
 
-  constructor() {
+  constructor(options: ProcessGuardOptions = {}) {
     this.redis = new IORedis(getRedisUrl(), {
       maxRetriesPerRequest: null,
       connectTimeout: appConfig.redis.connectTimeout,
     });
     this.token = `${process.pid}:${randomBytes(8).toString('hex')}`;
+    this.onLost = options.onLost ?? (() => process.kill(process.pid, 'SIGTERM'));
+  }
+
+  /** Our lock token. Tests use it to inspect the key. */
+  get lockToken(): string {
+    return this.token;
   }
 
   /**
@@ -126,20 +144,53 @@ export class ProcessGuardService {
     return this.acquire();
   }
 
+  /**
+   * One heartbeat: refresh the TTL if we still own the lock.
+   *
+   * If the refresh finds the key gone or foreign, distinguish EXPIRED from
+   * STOLEN before doing anything drastic. 2026-09-04: a machine-wide OOM
+   * stall paused this process for longer than LOCK_TTL_MS; the key simply
+   * expired with nobody else holding it, but the old code treated any
+   * refresh miss as "stolen", SIGTERM'd itself, and the shutdown then hung
+   * for two days with the API up and the file watcher dead. An expired lock
+   * with no other holder is ours to take back (SET NX is atomic, so if two
+   * instances race here exactly one wins and the other correctly reports
+   * `lost`).
+   */
+  async refreshOnce(): Promise<RefreshOutcome> {
+    const refreshed = (await this.redis.eval(REFRESH_SCRIPT, 1, LOCK_KEY, this.token, String(LOCK_TTL_MS))) as number;
+    if (refreshed === 1) return 'kept';
+
+    const reacquired = await this.redis.set(LOCK_KEY, this.token, 'PX', LOCK_TTL_MS, 'NX');
+    if (reacquired === 'OK') {
+      logger.warn(
+        { token: this.token, ttlMs: LOCK_TTL_MS },
+        '⚠️ Singleton lock had expired (heartbeat stalled longer than the TTL); re-acquired'
+      );
+      return 'reacquired';
+    }
+
+    const holder = await this.redis.get(LOCK_KEY);
+    logger.error(
+      { token: this.token, currentHolder: holder },
+      '🚨 Singleton lock is held by another instance. Shutting down.'
+    );
+    return 'lost';
+  }
+
   private startHeartbeat(): void {
     if (this.heartbeatTimer) return;
     const tick = async (): Promise<void> => {
       try {
-        const result = (await this.redis.eval(REFRESH_SCRIPT, 1, LOCK_KEY, this.token, String(LOCK_TTL_MS))) as number;
-        if (result === 0) {
-          logger.error(
-            { token: this.token },
-            '🚨 Singleton lock was lost (TTL expired or stolen). Process should exit.'
-          );
-          process.kill(process.pid, 'SIGTERM');
+        const outcome = await this.refreshOnce();
+        if (outcome === 'lost') {
+          this.acquired = false;
+          this.onLost();
           return; // do not reschedule
         }
       } catch (error) {
+        // Redis unreachable: keep trying. The lock expires on its own if we
+        // stay disconnected, and the next successful tick re-acquires it.
         logger.error({ error }, 'Singleton heartbeat failed');
       }
       // Self-rescheduling: only schedule the NEXT heartbeat after this one

@@ -14,6 +14,7 @@ import { transcriptionQueue } from './services/queue.js';
 import { retentionService } from './services/retention.js';
 import { workManager } from './services/work-manager.js';
 import { logFatalError, logger } from './utils/logger.js';
+import { armShutdownDeadline } from './utils/shutdown-deadline.js';
 import { transcriptionWorker } from './workers/transcription-worker.js';
 
 // =============================================================================
@@ -192,19 +193,18 @@ class TranscriptionPalantir {
   // ===========================================================================
 
   private setupProcessHandlers(): void {
-    // Graceful shutdown on SIGTERM
-    process.on('SIGTERM', async () => {
-      logger.info('Received SIGTERM, initiating graceful shutdown...');
+    // Graceful shutdown on SIGTERM / SIGINT, under a hard deadline: if any
+    // component's stop() hangs (2026-09-04: a Redis quit() that never
+    // resolved), the process still exits and systemd restarts it.
+    const shutdown = async (signal: string): Promise<void> => {
+      logger.info(`Received ${signal}, initiating graceful shutdown...`);
+      const cancelDeadline = armShutdownDeadline();
       await this.stop();
+      cancelDeadline();
       process.exit(0);
-    });
-
-    // Graceful shutdown on SIGINT (Ctrl+C)
-    process.on('SIGINT', async () => {
-      logger.info('Received SIGINT, initiating graceful shutdown...');
-      await this.stop();
-      process.exit(0);
-    });
+    };
+    process.on('SIGTERM', () => void shutdown('SIGTERM'));
+    process.on('SIGINT', () => void shutdown('SIGINT'));
 
     // Handle uncaught exceptions
     process.on('uncaughtException', (error) => {
