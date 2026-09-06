@@ -48,15 +48,79 @@ FAILED=0
 echo "═══ Health check ═══"
 WAITED=0
 while [ $WAITED -lt 30 ]; do
-  HEALTH=$(curl -fsS "$API_URL/api/v1/health" 2>/dev/null || echo '{}')
-  if [ "$(echo "$HEALTH" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("status",""))' 2>/dev/null)" = "ok" ]; then
-    pass "service healthy (after ${WAITED}s)"
+  READINESS=$(curl -fsS "$API_URL/api/v1/ready" 2>/dev/null || echo '{}')
+  if [ "$(echo "$READINESS" | python3 -c 'import sys,json;print(json.load(sys.stdin).get("status",""))' 2>/dev/null)" = "ready" ]; then
+    pass "service ready (after ${WAITED}s)"
     break
   fi
   sleep 2 && WAITED=$((WAITED + 2))
 done
 if [ "$WAITED" -ge 30 ]; then
-  fail "service did not become healthy within 30s"
+  fail "service did not become ready within 30s"
+fi
+
+echo ""
+echo "═══ TEST 0 — API contract ═══"
+SEED0=$(date +%s%N)
+
+# /api/v1/ready → HTTP 200, JSON .status == "ready"
+READY_CODE=$(curl -s -o "$TMP/ready-body.json" -w '%{http_code}' "$API_URL/api/v1/ready" 2>/dev/null || echo "000")
+READY_STATUS=$(python3 -c '
+import json
+try:
+    print(json.load(open("'"$TMP"'/ready-body.json")).get("status", ""))
+except Exception:
+    print("")
+' 2>/dev/null)
+if [ "$READY_CODE" = "200" ] && [ "$READY_STATUS" = "ready" ]; then
+  pass "/api/v1/ready → 200, status=ready"
+else
+  fail "/api/v1/ready → HTTP $READY_CODE, status=$READY_STATUS (expected 200/ready)"
+fi
+
+# Burst: 150 sequential loopback GETs — must all be 200 (rate limiter must not
+# 500 a local caller; ISC-1/Anti-1 from the reliability-overhaul ISA)
+BURST_LOG="$TMP/burst-codes.txt"
+: > "$BURST_LOG"
+for _ in $(seq 1 150); do
+  curl -s -o /dev/null -w '%{http_code}\n' "$API_URL/api/v1/jobs?limit=1" >> "$BURST_LOG"
+done
+NON200_COUNT=$(grep -vc '^200$' "$BURST_LOG" || true)
+if [ "$NON200_COUNT" -eq 0 ]; then
+  pass "150/150 loopback GET /api/v1/jobs?limit=1 returned 200 (non-200 count: $NON200_COUNT)"
+else
+  fail "$NON200_COUNT of 150 loopback GET /api/v1/jobs?limit=1 did NOT return 200"
+fi
+
+# Unknown job id → HTTP 404, JSON .success == false
+NOTFOUND_CODE=$(curl -s -o "$TMP/notfound-body.json" -w '%{http_code}' "$API_URL/api/v1/jobs/does-not-exist-$SEED0" 2>/dev/null || echo "000")
+NOTFOUND_SUCCESS=$(python3 -c '
+import json
+try:
+    d = json.load(open("'"$TMP"'/notfound-body.json"))
+    print("false" if d.get("success") is False else "not-false")
+except Exception:
+    print("parse-error")
+' 2>/dev/null)
+if [ "$NOTFOUND_CODE" = "404" ] && [ "$NOTFOUND_SUCCESS" = "false" ]; then
+  pass "GET /api/v1/jobs/does-not-exist-$SEED0 → 404, success=false"
+else
+  fail "GET /api/v1/jobs/does-not-exist-$SEED0 → HTTP $NOTFOUND_CODE, success=$NOTFOUND_SUCCESS (expected 404/false)"
+fi
+
+# /api/v1/health → HTTP 200, JSON .status == "ok"
+HEALTH_CODE=$(curl -s -o "$TMP/health-body.json" -w '%{http_code}' "$API_URL/api/v1/health" 2>/dev/null || echo "000")
+HEALTH_STATUS=$(python3 -c '
+import json
+try:
+    print(json.load(open("'"$TMP"'/health-body.json")).get("status", ""))
+except Exception:
+    print("")
+' 2>/dev/null)
+if [ "$HEALTH_CODE" = "200" ] && [ "$HEALTH_STATUS" = "ok" ]; then
+  pass "/api/v1/health → 200, status=ok"
+else
+  fail "/api/v1/health → HTTP $HEALTH_CODE, status=$HEALTH_STATUS (expected 200/ok)"
 fi
 
 echo ""
