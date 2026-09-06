@@ -4,7 +4,6 @@
  * System health and readiness endpoints
  */
 
-import { access, constants } from 'node:fs/promises';
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import { appConfig } from '../../config/index.js';
 import { fasterWhisperService } from '../../services/faster-whisper.js';
@@ -12,19 +11,18 @@ import { fileWatcher } from '../../services/file-watcher.js';
 import { metrics } from '../../services/metrics.js';
 import { transcriptionQueue } from '../../services/queue.js';
 import type { ServiceHealth, SystemHealth } from '../../types/index.js';
+import {
+  checkDirectoryAccess,
+  checkFileWatcher,
+  checkQueue,
+  checkRedis,
+  checkRequests,
+  checkWhisper,
+  checkWorker,
+  READY_TIMEOUTS,
+} from './health-checks.js';
 
-// =============================================================================
-// HELPER FUNCTIONS
-// =============================================================================
-
-async function checkDirectoryAccess(dirPath: string): Promise<boolean> {
-  try {
-    await access(dirPath, constants.R_OK | constants.W_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
+export { READY_TIMEOUTS };
 
 // =============================================================================
 // HEALTH ROUTES
@@ -65,74 +63,104 @@ export async function healthRoutes(fastify: FastifyInstance, _opts: FastifyPlugi
   // ---------------------------------------------------------------------------
   // Readiness Probe
   // ---------------------------------------------------------------------------
+  //
+  // Unlike /health, this endpoint reaches out: a real Redis ping, a real
+  // BullMQ queue read, and the live in-process server-error rate. That's the
+  // seam that was missing when /api/v1/jobs was 500ing for 7 of every 15
+  // minutes while this endpoint kept saying "ok" (see ISA.md). "Hard" checks
+  // (redis, queue, requests) can turn the HTTP status to 503; "soft" checks
+  // (worker, whisper, file_watcher) are reported but never fail the probe
+  // outside production, where an unstarted worker also fails it.
+
+  // `additionalProperties: true` on `checks` (and each check within it) is
+  // load-bearing: fast-json-stringify treats a bare `{ type: 'object' }` with
+  // no declared shape as empty and serializes `{}`, silently dropping every
+  // field the checks below produce.
+  const checkSchema = { type: 'object', additionalProperties: true };
+  const readyResponseSchema = {
+    type: 'object',
+    additionalProperties: true,
+    properties: {
+      status: { type: 'string' },
+      checks: {
+        type: 'object',
+        additionalProperties: true,
+        properties: {
+          redis: checkSchema,
+          queue: checkSchema,
+          requests: checkSchema,
+          worker: checkSchema,
+          whisper: checkSchema,
+          file_watcher: checkSchema,
+        },
+      },
+      services: { type: 'array' },
+      timestamp: { type: 'string' },
+    },
+  };
 
   fastify.get(
     '/ready',
     {
       schema: {
-        description: 'Readiness check with service status',
+        description: 'Readiness check: Redis, queue, request error rate, worker, whisper, file watcher',
         tags: ['health'],
         response: {
-          200: {
-            type: 'object',
-            properties: {
-              status: { type: 'string' },
-              services: { type: 'array' },
-              timestamp: { type: 'string' },
-            },
-          },
+          200: readyResponseSchema,
+          503: readyResponseSchema,
         },
       },
     },
     async (_request, reply) => {
-      const services: ServiceHealth[] = [];
+      const [redis, queue, whisper, fileWatcherCheck] = await Promise.all([
+        checkRedis(),
+        checkQueue(),
+        checkWhisper(),
+        checkFileWatcher(),
+      ]);
+      const requests = checkRequests();
+      const worker = checkWorker();
 
-      // Check Queue Service
-      try {
-        const isQueueReady = transcriptionQueue.isReady;
-        services.push({
+      const checks = {
+        redis,
+        queue,
+        requests,
+        worker,
+        whisper,
+        file_watcher: fileWatcherCheck,
+      };
+
+      const hardChecksPass = redis.status === 'up' && queue.status === 'up' && requests.status !== 'degraded';
+      // Soft everywhere except production, where a stopped worker means jobs
+      // never process even though Redis and the queue read are fine.
+      const workerBlocksReadiness = appConfig.env === 'production' && worker.status !== 'up';
+      const ready = hardChecksPass && !workerBlocksReadiness;
+
+      reply.code(ready ? 200 : 503);
+
+      // Backward-compat `services` array for existing consumers.
+      const services: ServiceHealth[] = [
+        {
           name: 'queue',
-          status: isQueueReady ? 'up' : 'down',
+          status: queue.status,
           lastCheck: new Date().toISOString(),
-        });
-      } catch (error) {
-        services.push({
-          name: 'queue',
-          status: 'down',
-          lastCheck: new Date().toISOString(),
-          error: (error as Error).message,
-        });
-      }
-
-      // Check File Watcher Service
-      try {
-        const watcherRunning = fileWatcher.running;
-        const watchDirAccessible = await checkDirectoryAccess(appConfig.processing.watchDirectory);
-
-        services.push({
+          ...(queue.latencyMs !== undefined && { responseTime: queue.latencyMs }),
+          ...(queue.error !== undefined && { error: queue.error }),
+        },
+        {
           name: 'file_watcher',
-          status: watcherRunning && watchDirAccessible ? 'up' : 'down',
+          status: fileWatcherCheck.status,
           lastCheck: new Date().toISOString(),
           metadata: {
-            watching: watcherRunning,
-            directoryAccessible: watchDirAccessible,
+            watching: fileWatcherCheck.running,
+            directoryAccessible: fileWatcherCheck.directoryAccessible,
           },
-        });
-      } catch (error) {
-        services.push({
-          name: 'file_watcher',
-          status: 'down',
-          lastCheck: new Date().toISOString(),
-          error: (error as Error).message,
-        });
-      }
+        },
+      ];
 
-      const allServicesUp = services.every((s) => s.status === 'up');
-      const statusCode = allServicesUp ? 200 : 503;
-
-      reply.code(statusCode);
       return {
-        status: allServicesUp ? 'ready' : 'not ready',
+        status: ready ? 'ready' : 'not ready',
+        checks,
         services,
         timestamp: new Date().toISOString(),
       };
