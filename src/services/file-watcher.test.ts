@@ -26,6 +26,10 @@ const mockConfig = {
     port: 6379,
     connectTimeout: 10000,
   },
+  queue: {
+    removeOnComplete: 100,
+    removeOnFail: 50,
+  },
   env: 'test',
 };
 

@@ -169,6 +169,7 @@ export interface AppConfig {
   processing: ProcessingConfig;
   api: ApiConfig;
   monitoring: MonitoringConfig;
+  queue: QueueConfig;
 }
 
 export interface RedisConfig {
@@ -225,6 +226,13 @@ export interface MonitoringConfig {
   healthCheckInterval: number;
   metricsEnabled: boolean;
   prometheusPort: number;
+}
+
+export interface QueueConfig {
+  /** Keep the last N completed jobs (BullMQ `removeOnComplete`). 0 means "remove immediately". */
+  removeOnComplete: number;
+  /** Keep the last N failed jobs (BullMQ `removeOnFail`). 0 means "remove immediately". */
+  removeOnFail: number;
 }
 
 // =============================================================================

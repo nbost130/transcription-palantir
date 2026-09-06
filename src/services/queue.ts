@@ -7,7 +7,7 @@
 import { type Job, Queue, QueueEvents } from 'bullmq';
 import { Redis } from 'ioredis';
 import { appConfig, getRedisUrl } from '../config/index.js';
-import { JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js';
+import { type AppConfig, JobPriority, JobStatus, type TranscriptionJob } from '../types/index.js';
 import { logQueueEvent, queueLogger } from '../utils/logger.js';
 import { redisRetryStrategy } from './redis-retry.js';
 
@@ -119,18 +119,33 @@ redisConnection.on('end', () => {
 // QUEUE CONFIGURATION
 // =============================================================================
 
-const queueOptions = {
-  connection: redisConnection,
-  defaultJobOptions: {
-    removeOnComplete: false,
-    removeOnFail: false,
-    attempts: appConfig.processing.maxAttempts,
+/**
+ * Build BullMQ's `defaultJobOptions` from config. Pure function (no Redis
+ * access) so it's directly unit-testable — see queue-options.test.ts.
+ *
+ * BullMQ's `removeOnComplete`/`removeOnFail` accept `true` (remove
+ * immediately), `false` (keep forever), or a number (keep the last N).
+ * REMOVE_ON_COMPLETE/REMOVE_ON_FAIL are configured as "keep last N" counts;
+ * a configured `0` is mapped to `true` here, since "keep the last 0" and
+ * "remove immediately" are the same outcome and `true` is BullMQ's own
+ * spelling for it.
+ */
+export function buildDefaultJobOptions(config: Pick<AppConfig, 'queue' | 'processing'>) {
+  return {
+    removeOnComplete: config.queue.removeOnComplete === 0 ? true : config.queue.removeOnComplete,
+    removeOnFail: config.queue.removeOnFail === 0 ? true : config.queue.removeOnFail,
+    attempts: config.processing.maxAttempts,
     backoff: {
       type: 'exponential' as const,
       delay: 5000,
     },
     delay: 0,
-  },
+  };
+}
+
+const queueOptions = {
+  connection: redisConnection,
+  defaultJobOptions: buildDefaultJobOptions(appConfig),
 };
 
 // =============================================================================
