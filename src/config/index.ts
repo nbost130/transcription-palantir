@@ -40,7 +40,9 @@ const EnvSchema = z.object({
   WHISPER_MODEL: z.string().default('medium'),
   WHISPER_BINARY_PATH: z.string().default('/usr/local/bin/whisper'),
   WHISPER_PYTHON_PATH: z.string().default('/home/nbost/faster-whisper-env/bin/python3'),
-  COMPUTE_TYPE: z.string().default('float16'),
+  // Mithrandir has no NVIDIA GPU (Intel Iris Xe iGPU only); float16 requires
+  // CUDA. int8 is the correct CPU default — see CLAUDE.md.
+  COMPUTE_TYPE: z.string().default('int8'),
   WHISPER_LANGUAGE: z.string().default('auto'),
   WHISPER_TASK: z.string().default('transcribe'),
   WHISPER_USE_PYTHON: z.coerce.boolean().default(true),
@@ -77,6 +79,12 @@ const EnvSchema = z.object({
   HEALTH_CHECK_INTERVAL: z.coerce.number().default(30000),
   METRICS_ENABLED: z.coerce.boolean().default(true),
   PROMETHEUS_PORT: z.coerce.number().default(9090),
+
+  // Queue retention (BullMQ defaultJobOptions). A value of 0 is mapped to
+  // `true` (remove immediately) at the point of use in src/services/queue.ts;
+  // any positive N keeps the last N jobs of that kind.
+  REMOVE_ON_COMPLETE: z.coerce.number().int().nonnegative().default(100),
+  REMOVE_ON_FAIL: z.coerce.number().int().nonnegative().default(50),
 });
 
 // =============================================================================
@@ -146,6 +154,11 @@ function createConfig(): AppConfig {
       healthCheckInterval: env.HEALTH_CHECK_INTERVAL,
       metricsEnabled: env.METRICS_ENABLED,
       prometheusPort: env.PROMETHEUS_PORT,
+    },
+
+    queue: {
+      removeOnComplete: env.REMOVE_ON_COMPLETE,
+      removeOnFail: env.REMOVE_ON_FAIL,
     },
   };
 }
