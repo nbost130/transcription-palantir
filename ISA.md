@@ -3,11 +3,11 @@ task: "Palantir reliability overhaul: truthful errors, health, rate limit"
 slug: 20260906-palantir-reliability-overhaul
 effort: advanced
 effort_source: auto
-phase: build
+phase: verify
 progress: 0/22
 mode: iterate
 started: 2026-09-06T15:05:00Z
-updated: 2026-09-06T15:05:00Z
+updated: 2026-09-06T15:15:00Z
 principal_stated_goal: "PAlantir on Mithrandir is broken. Please review and spin up Sonnet Agents to fix it as needed. We've had a lot of stability issues with this over the past year and I want it overhauled end to end if needed to make sure it works flawlessly"
 principal_stated_goal_source: prompt
 principal_stated_goal_signal: 2
@@ -125,6 +125,13 @@ After deploy, 200 consecutive `GET /api/v1/jobs` from Mithrandir's loopback with
 - 2026-09-06 15:05 — Allowlist by address class (loopback/RFC1918/CGNAT) rather than raising `max`: the limiter's purpose is untrusted clients, and every real client is on the tailnet or loopback.
 - 2026-09-06 15:05 — External watch = Uptime Kuma keyword monitor on `/api/v1/ready`. Tirith only grades systemd state and its manifest has no Palantir endpoint; adding one is a unified-api change and is deferred.
 - 2026-09-06 15:05 — Builders: Sonnet, one worktree each, disjoint files; judge: Opus silent-failure review of the integrated diff. Cross-vendor audit skipped: single-tenant personal service, deterministic tests cover the changed surface (claim 11 visibility row).
+
+- 2026-09-06 15:00 — vitest and `scripts/check-file-size.mjs` walked into `.claude/worktrees/**` from the main tree (4 agent worktrees → every test ran five times against one Redis, and the size gate flagged files it allowlists by path). Fixed with `vitest.config.ts` exclude and a `.claude` entry in the checker; not a product change.
+- 2026-09-06 15:05 — `biome.json` said `test/**`; the directory is `tests/`. Biome had covered zero test files while `bun run lint` exited 0. Fixed path, applied its fixes; one unsafe fix (arrow-function mock used with `new`) broke a test and was reverted with a `biome-ignore`.
+- 2026-09-06 15:08 — WP2 split checks into `src/api/routes/health-checks.ts` to stay under the 500-line pre-commit cap; `/ready` schema uses `additionalProperties: true` because fast-json-stringify strips undeclared fields (found by the builder when `checks` serialised as `{}`).
+- 2026-09-06 15:10 — Health/readiness URLs excluded from request-stats (`isProbeUrl`): a 503 from `/ready` must not feed the error rate it reports.
+- 2026-09-06 15:10 — The `src/*.bak` files named in Problem are untracked on the host, not in git; ISC-17 is satisfied by deleting them on Mithrandir at deploy, not by a commit.
+- 2026-09-06 15:10 — Last two Actions deploys (2026-06-15, 06-22) failed at `is-active` five seconds after restart: `pkill` before `restart` raced `Restart=on-failure`. Removed the pkill; both gates now poll 30 s.
 
 ## Changelog
 
