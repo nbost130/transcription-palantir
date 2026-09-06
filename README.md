@@ -133,7 +133,8 @@ bun run start:watcher  # File watcher
 
 **⚠️ These endpoints are for internal/backend use only. Frontends should access via Unified API.**
 
-- `GET /api/v1/health` - Health check
+- `GET /api/v1/health` - Liveness check (process is up; does not reflect Redis/queue/error-rate)
+- `GET /api/v1/ready` - Deep readiness check (Redis, queue, error rate, worker, whisper) - the endpoint to monitor
 - `GET /api/v1/metrics` - Prometheus metrics
 - `GET /api/v1/jobs` - List transcription jobs
 - `POST /api/v1/jobs` - Create new transcription job
@@ -226,10 +227,13 @@ docker-compose up --scale worker=4
 
 ## 📊 Monitoring
 
-- **Health Checks**: `/health` endpoint with detailed system status
-- **Metrics**: Prometheus-compatible metrics at `/metrics`
+- **Liveness**: `/api/v1/health` reports only that the process is up. It does not reflect Redis, queue, or request error rate - never monitor it for correctness.
+- **Readiness**: `/api/v1/ready` is the endpoint to monitor. It returns 503 when Redis is unreachable, the queue read fails, or the recent server-error rate is high, and 200 otherwise.
+- **Metrics**: Prometheus-compatible metrics at `/api/v1/metrics`
 - **Logging**: Structured JSON logs with configurable levels
 - **Dashboard**: Real-time job monitoring with WebSocket updates
+
+Rate limiting exempts private, loopback, and tailnet addresses (`127.0.0.1`, RFC1918, CGNAT `100.64.0.0/10`) from the request cap. Public addresses that exceed it get `429` with a `retry-after` header.
 
 ## 🔒 Security
 
