@@ -16,6 +16,7 @@ import { appConfig } from '../config/index.js';
 import { logger } from '../utils/logger.js';
 import { errorHandler } from './middleware/error.js';
 import { requestLogger } from './middleware/logger.js';
+import { buildRateLimitOptions } from './rate-limit-policy.js';
 import { healthRoutes } from './routes/health.js';
 import { jobRoutes } from './routes/jobs.js';
 import { metricsRoutes } from './routes/metrics.js';
@@ -43,7 +44,10 @@ export class ApiServer {
   private createServer(): FastifyInstance {
     const opts: FastifyServerOptions = {
       logger: false, // Use custom Pino logger
-      trustProxy: true,
+      // Nothing proxies this service. With trustProxy: true, `request.ip`
+      // comes from X-Forwarded-For, so any client could claim 127.0.0.1 and
+      // skip the rate limiter's allowList (proven in review, 2026-09-06).
+      trustProxy: false,
       requestIdHeader: 'x-request-id',
       requestIdLogLabel: 'requestId',
       disableRequestLogging: true, // Use custom request logger
@@ -113,19 +117,10 @@ export class ApiServer {
       crossOriginEmbedderPolicy: false,
     });
 
-    // Rate Limiting
-    fastify.register(rateLimit, {
-      max: appConfig.api.rateLimitMax,
-      timeWindow: appConfig.api.rateLimitWindow,
-      errorResponseBuilder: (_req, context) => {
-        return {
-          success: false,
-          error: 'Rate limit exceeded',
-          retryAfter: context.after,
-          timestamp: new Date().toISOString(),
-        };
-      },
-    });
+    // Rate Limiting — allowList and error shape live in rate-limit-policy.ts,
+    // shared verbatim with the test suite so behaviour can't drift from
+    // what's actually tested.
+    fastify.register(rateLimit, buildRateLimitOptions());
 
     // WebSocket Support
     fastify.register(websocket, {

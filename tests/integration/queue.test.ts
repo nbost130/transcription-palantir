@@ -4,9 +4,9 @@
  * Tests the BullMQ queue system with Redis
  */
 
-import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { transcriptionQueue } from '../../src/services/queue.js';
-import { JobStatus, JobPriority } from '../../src/types/index.js';
+import { JobPriority } from '../../src/types/index.js';
 
 describe('Queue Integration Tests', () => {
   beforeAll(async () => {

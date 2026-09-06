@@ -22,7 +22,7 @@ describe('WorkManagerService', () => {
   beforeAll(async () => {
     root = await mkdtemp(join(tmpdir(), 'palantir-wm-'));
     inbox = join(root, 'inbox');
-    await writeFile(join(inbox + '.keepalive'), ''); // dummy
+    await writeFile(join(`${inbox}.keepalive`), ''); // dummy
     wm = new WorkManagerService({
       workDir: join(root, 'work'),
       archiveDir: join(root, 'archive'),
@@ -54,7 +54,7 @@ describe('WorkManagerService', () => {
 
   it('setupForJob copies inbox file into work/{sha}/source.{ext}', async () => {
     const inboxPath = join(inbox, 'session-1.ogg');
-    const bytes = Buffer.from('audio-bytes-A-' + Date.now());
+    const bytes = Buffer.from(`audio-bytes-A-${Date.now()}`);
     await writeFile(inboxPath, bytes);
 
     const result = await wm.setupForJob(inboxPath, SHA_A);
@@ -161,8 +161,8 @@ describe('WorkManagerService', () => {
 
     const fileA = join(subdir, 'recording-A.ogg');
     const fileB = join(subdir, 'recording-B.ogg');
-    await writeFile(fileA, Buffer.from('audio-A-' + Date.now()));
-    await writeFile(fileB, Buffer.from('audio-B-' + Date.now()));
+    await writeFile(fileA, Buffer.from(`audio-A-${Date.now()}`));
+    await writeFile(fileB, Buffer.from(`audio-B-${Date.now()}`));
 
     const shaA = 'a'.repeat(64);
     const shaB = 'b'.repeat(64);
@@ -184,7 +184,7 @@ describe('WorkManagerService', () => {
     await mkdir(subdir, { recursive: true });
 
     const weirdName = join(subdir, 'Holy Spirit & The Believer (2024-04-12).ogg');
-    await writeFile(weirdName, Buffer.from('content-' + Date.now()));
+    await writeFile(weirdName, Buffer.from(`content-${Date.now()}`));
 
     const sha = 'c'.repeat(64);
     const result = await wm.setupForJob(weirdName, sha);

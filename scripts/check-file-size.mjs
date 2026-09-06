@@ -9,7 +9,7 @@ import { join, extname } from 'node:path';
 
 const MAX_LINES = 500;
 const EXTENSIONS = ['.ts', '.js', '.tsx', '.jsx'];
-const EXCLUDE_PATTERNS = ['node_modules', 'dist', 'coverage', '.git'];
+const EXCLUDE_PATTERNS = ['node_modules', 'dist', 'coverage', '.git', '.claude'];
 
 // Pre-existing files that exceed the limit — tracked for future refactoring
 const KNOWN_VIOLATIONS = [

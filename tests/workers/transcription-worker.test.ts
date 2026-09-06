@@ -1,8 +1,7 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { TranscriptionWorker } from '../../src/workers/transcription-worker';
-import { appConfig } from '../../src/config/index';
-import { logger } from '../../src/utils/logger';
 import { Worker } from 'bullmq';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { logger } from '../../src/utils/logger';
+import { TranscriptionWorker } from '../../src/workers/transcription-worker';
 
 // Mock dependencies
 vi.mock('bullmq', () => ({
@@ -10,10 +9,10 @@ vi.mock('bullmq', () => ({
   Job: vi.fn(),
 }));
 vi.mock('ioredis', () => {
+  // Must stay a `function` (not an arrow): ioredis is constructed with `new`.
+  // biome-ignore lint/complexity/useArrowFunction: constructor mock needs `this`-capable function
   const RedisMock = vi.fn(function () {
-    return {
-      on: vi.fn(),
-    };
+    return { on: vi.fn() };
   });
   return {
     default: RedisMock,
@@ -103,17 +102,12 @@ describe.skip('TranscriptionWorker', () => {
     await worker.start();
 
     // Find the 'stalled' event handler
-    const stalledHandler = mockBullWorker.on.mock.calls.find(
-      (call: any[]) => call[0] === 'stalled'
-    )?.[1];
+    const stalledHandler = mockBullWorker.on.mock.calls.find((call: any[]) => call[0] === 'stalled')?.[1];
     expect(stalledHandler).toBeDefined();
 
     // Trigger the handler
     stalledHandler('job-123');
 
-    expect(logger.warn).toHaveBeenCalledWith(
-      { jobId: 'job-123' },
-      expect.stringContaining('[SELF-HEAL]')
-    );
+    expect(logger.warn).toHaveBeenCalledWith({ jobId: 'job-123' }, expect.stringContaining('[SELF-HEAL]'));
   });
 });

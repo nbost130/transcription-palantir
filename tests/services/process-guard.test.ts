@@ -9,8 +9,8 @@
 
 import { Redis as IORedis } from 'ioredis';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ProcessGuardService } from '../../src/services/process-guard.js';
 import { getRedisUrl } from '../../src/config/index.js';
+import { ProcessGuardService } from '../../src/services/process-guard.js';
 
 const skipIfNoRedis = process.env.SKIP_REDIS_TESTS === '1';
 const LOCK_KEY = 'palantir:singleton-lock';

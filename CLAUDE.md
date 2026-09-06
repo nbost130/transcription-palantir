@@ -336,3 +336,13 @@ On Mithrandir, Docker container network changes trigger Tailscale DNS reconfigur
 **Never set `device=cuda` or `computeType=float16` on this host.** CUDA init will fail (`CUDA driver version is insufficient...`) and silently fall back to CPU anyway, so the change buys nothing and only adds a startup error. There is no GPU speed to recover here; GPU acceleration would require new physical NVIDIA hardware plus a driver install. Do not "fix" the pipeline back to CUDA.
 
 The device/compute-type defaults are documented inline at `src/services/faster-whisper.ts` (device default) and `src/workers/transcription-worker.ts` (computeType: int8).
+
+## Incident: silent 500s from the rate limiter (2026-08-28 → 2026-09-06)
+
+`@fastify/rate-limit` (no allowList) plus an `errorResponseBuilder` returning an
+object with no `statusCode` turned 47% of requests into 500s logged as
+`"error":{}`, while `/` and `/api/v1/health` stayed green the whole time.
+**Readiness is `/api/v1/ready`** - never monitor `/` or `/api/v1/health` for
+correctness; they only prove the process is up, not that requests succeed.
+`logs/service.log` is the pino sink; journald is empty by design (see Runtime
+above), so `journalctl` will never show this class of error.

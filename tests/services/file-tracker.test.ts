@@ -61,7 +61,7 @@ describe.skipIf(skipIfNoRedis)('FileTrackerService - content hash dedup', () => 
   });
 
   it('marks a file processed once, then recognises its content under any other name', async () => {
-    const bytes = Buffer.from('regression-bytes-' + Date.now());
+    const bytes = Buffer.from(`regression-bytes-${Date.now()}`);
     const original = join(tmpDir, `dup-original-${Date.now()}.ogg`);
     const sanitized = join(tmpDir, `dup-2006-${Date.now()}.ogg`);
     await writeFile(original, bytes);
@@ -83,7 +83,7 @@ describe.skipIf(skipIfNoRedis)('FileTrackerService - content hash dedup', () => 
   });
 
   it('caches hashes per (path, size, mtime) so repeated lookups are cheap', async () => {
-    const bytes = Buffer.from('cache-test-' + Date.now());
+    const bytes = Buffer.from(`cache-test-${Date.now()}`);
     const path = join(tmpDir, `cache-${Date.now()}.ogg`);
     await writeFile(path, bytes);
 
@@ -101,7 +101,7 @@ describe.skipIf(skipIfNoRedis)('FileTrackerService - content hash dedup', () => 
   });
 
   it('unmarkProcessed clears the path key even if the file has been deleted (regression: PR #37 Gemini blocker)', async () => {
-    const bytes = Buffer.from('regression-unmark-' + Date.now());
+    const bytes = Buffer.from(`regression-unmark-${Date.now()}`);
     const path = join(tmpDir, `unmark-deleted-${Date.now()}.ogg`);
     await writeFile(path, bytes);
 
@@ -121,7 +121,7 @@ describe.skipIf(skipIfNoRedis)('FileTrackerService - content hash dedup', () => 
     // Verify the path key is gone: re-create the file with DIFFERENT bytes
     // (so the content-hash registry can't help). If the path key was stuck,
     // isProcessed would return true. With the fix, it returns false.
-    const differentBytes = Buffer.from('completely-different-bytes-' + Date.now());
+    const differentBytes = Buffer.from(`completely-different-bytes-${Date.now()}`);
     await writeFile(path, differentBytes);
     expect(await tracker.isProcessed(path)).toBe(false);
   });

@@ -11,8 +11,8 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { WorkManagerService } from '../../src/services/work-manager.js';
 import { MetricsService } from '../../src/services/metrics.js';
+import { WorkManagerService } from '../../src/services/work-manager.js';
 
 describe('Pipeline integration — stage / dedup / archive lifecycle', () => {
   let root: string;
@@ -86,8 +86,8 @@ describe('Pipeline integration — stage / dedup / archive lifecycle', () => {
     await mkdir(subdir, { recursive: true });
     const fileA = join(subdir, 'lesson-1.ogg');
     const fileB = join(subdir, 'lesson-2.ogg');
-    await writeFile(fileA, Buffer.from('audio-A-unique-' + Date.now()));
-    await writeFile(fileB, Buffer.from('audio-B-unique-' + Date.now()));
+    await writeFile(fileA, Buffer.from(`audio-A-unique-${Date.now()}`));
+    await writeFile(fileB, Buffer.from(`audio-B-unique-${Date.now()}`));
 
     const resultA = await processNewInboxFile(fileA);
     const resultB = await processNewInboxFile(fileB);
@@ -120,7 +120,7 @@ describe('Pipeline integration — stage / dedup / archive lifecycle', () => {
     const subdir = join(inboxDir, 'dup-test');
     await mkdir(subdir, { recursive: true });
     const fileA = join(subdir, 'first.ogg');
-    const sharedBytes = Buffer.from('shared-content-' + Date.now());
+    const sharedBytes = Buffer.from(`shared-content-${Date.now()}`);
     await writeFile(fileA, sharedBytes);
 
     const r1 = await processNewInboxFile(fileA);
@@ -147,7 +147,7 @@ describe('Pipeline integration — stage / dedup / archive lifecycle', () => {
     const subdir = join(inboxDir, 'weird-names');
     await mkdir(subdir, { recursive: true });
     const weirdName = join(subdir, 'Holy Spirit & The Believer (2024-04-12).ogg');
-    await writeFile(weirdName, Buffer.from('weird-name-bytes-' + Date.now()));
+    await writeFile(weirdName, Buffer.from(`weird-name-bytes-${Date.now()}`));
 
     const result = await processNewInboxFile(weirdName);
     expect(result.action).toBe('staged');
@@ -163,7 +163,7 @@ describe('Pipeline integration — stage / dedup / archive lifecycle', () => {
     expect(archived).toContain(`${result.sha}.ogg`);
   });
 
-  it("metrics counters reflect the full pipeline behavior", async () => {
+  it('metrics counters reflect the full pipeline behavior', async () => {
     const before = (await m.snapshot()).counters;
     const subdir = join(inboxDir, 'metric-test');
     await mkdir(subdir, { recursive: true });

@@ -86,6 +86,11 @@ describe('ApiServer', () => {
   });
 
   describe('constructor', () => {
+    it('does not trust proxy headers (X-Forwarded-For would bypass the rate-limit allowList)', () => {
+      const opts = mockFastify.mock.calls[0]?.[0] as { trustProxy?: boolean } | undefined;
+      expect(opts?.trustProxy).toBe(false);
+    });
+
     it('should create a fastify server', () => {
       expect(mockFastify).toHaveBeenCalled();
       expect(server.instance).toBe(mockFastifyInstance);
