@@ -10,17 +10,17 @@
  * Tests the Fastify API server endpoints with mocked dependencies
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'vitest';
-import { mkdir, rm } from 'fs/promises';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import { mkdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { apiServer } from '../../src/api/server.js';
-import { transcriptionQueue } from '../../src/services/queue.js';
-import { fileWatcher } from '../../src/services/file-watcher.js';
 import { appConfig } from '../../src/config/index.js';
+import { fileWatcher } from '../../src/services/file-watcher.js';
+import { transcriptionQueue } from '../../src/services/queue.js';
 
 // Override watch directory for tests to avoid processing real files
-const TEST_WATCH_DIR = join(tmpdir(), 'palantir-test-watch-' + Date.now());
+const TEST_WATCH_DIR = join(tmpdir(), `palantir-test-watch-${Date.now()}`);
 appConfig.processing.watchDirectory = TEST_WATCH_DIR;
 
 const BASE_URL = `http://127.0.0.1:${appConfig.port}`;
@@ -85,7 +85,7 @@ describe('API Integration Tests', () => {
   });
 
   test('POST /jobs should create a new job (with error for non-existent file)', async () => {
-    const response = await fetch(`${BASE_URL}/api/v1/jobs`, {
+    const _response = await fetch(`${BASE_URL}/api/v1/jobs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

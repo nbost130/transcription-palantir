@@ -2,7 +2,7 @@
  * 🔮 Transcription Palantir - Configuration Tests
  */
 
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { appConfig, getRedisUrl, getWhisperCommand } from '../src/config/index.js';
 
 /**
@@ -104,9 +104,7 @@ describe('Configuration', () => {
 
   describe('validation', () => {
     it('should validate worker configuration', () => {
-      expect(appConfig.processing.maxWorkers).toBeGreaterThanOrEqual(
-        appConfig.processing.minWorkers
-      );
+      expect(appConfig.processing.maxWorkers).toBeGreaterThanOrEqual(appConfig.processing.minWorkers);
     });
 
     it('should validate file size configuration', () => {

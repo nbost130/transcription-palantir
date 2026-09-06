@@ -50,7 +50,7 @@ describe('RetentionService', () => {
     await writeFile(oldFile, Buffer.from('old-bytes'));
     await writeFile(newFile, Buffer.from('new-bytes'));
     await ageFile(oldFile, 200); // 200 days old
-    await ageFile(newFile, 1);   // 1 day old
+    await ageFile(newFile, 1); // 1 day old
 
     const svc = new RetentionService(archiveDir, duplicatesDir, 180, 30);
     const report = await svc.runOnce();
