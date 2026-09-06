@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ERROR_RATE_THRESHOLD, MIN_SAMPLES, WINDOW_MS, recordResponse, reset, snapshot } from './request-stats.js';
+import { ERROR_RATE_THRESHOLD, MIN_SAMPLES, recordResponse, reset, snapshot, WINDOW_MS } from './request-stats.js';
 
 describe('request-stats rolling window', () => {
   beforeEach(() => reset());
