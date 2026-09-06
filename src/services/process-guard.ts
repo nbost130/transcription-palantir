@@ -68,7 +68,14 @@ export class ProcessGuardService {
       connectTimeout: appConfig.redis.connectTimeout,
     });
     this.token = `${process.pid}:${randomBytes(8).toString('hex')}`;
-    this.onLost = options.onLost ?? (() => process.kill(process.pid, 'SIGTERM'));
+    this.onLost =
+      options.onLost ??
+      (() => {
+        // A lost lock is a failure, not a clean stop: exit non-zero so
+        // systemd (Restart=on-failure/always) brings a fresh instance up.
+        process.exitCode = 1;
+        process.kill(process.pid, 'SIGTERM');
+      });
   }
 
   /** Our lock token. Tests use it to inspect the key. */

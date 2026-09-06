@@ -201,7 +201,9 @@ class TranscriptionPalantir {
       const cancelDeadline = armShutdownDeadline();
       await this.stop();
       cancelDeadline();
-      process.exit(0);
+      // exitCode is 1 when the shutdown was self-initiated by a failure
+      // (lost singleton lock); 0 for an operator stop.
+      process.exit(typeof process.exitCode === 'number' ? process.exitCode : 0);
     };
     process.on('SIGTERM', () => void shutdown('SIGTERM'));
     process.on('SIGINT', () => void shutdown('SIGINT'));
