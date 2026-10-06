@@ -87,6 +87,10 @@ monitoring/
 # Backup files
 *.backup
 *.bak
+*.bak-*
+
+# Agent worktrees (ephemeral; managed by Claude Code / other agents)
+.claude/worktrees/
 
 # Local configuration overrides
 config/local.json
