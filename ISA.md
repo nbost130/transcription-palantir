@@ -41,7 +41,7 @@ A request to Palantir either succeeds or fails with a status code and a logged r
 
 ## Constraints
 
-- **Never edit production directly.** Changes land via PR on `nbost130/transcription-palantir`, merged to `main`; the deploy workflow (or a manual `git reset --hard origin/main && npm install && npm run build && systemctl --user restart`) puts them on Mithrandir.
+- **Never edit production directly.** Changes land via PR on `nbost130/transcription-palantir`, merged to `main`; the deploy workflow — or the manual fallback in [`docs/DEPLOYMENT.md` → Manual deploy on Mithrandir itself](docs/DEPLOYMENT.md#manual-deploy-on-mithrandir-itself-canonical) — puts them on Mithrandir. That procedure is **fetch + stash + `merge --ff-only` + an asserted end state**, never `git reset --hard origin/main`: the hard reset is denied on that box and it destroys local drift silently instead of surfacing it.
 - **Surgical.** No component added or removed as a "fix". The rate limiter stays; it gets an allowList and a correct error shape.
 - **Tests must run without Mithrandir.** Unit tests use the existing `tests/setup.ts` mocks; integration tests need a local Redis on :6379 (Homebrew redis, started 2026-09-06).
 - **CPU int8 only** for Whisper (`CLAUDE.md`); any config default must agree.

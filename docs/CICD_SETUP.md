@@ -240,19 +240,14 @@ ssh mithrandir
 # Check what commit is deployed
 cd /home/nbost/transcription-palantir
 git log -1
-
-# Rollback to previous commit
-git reset --hard HEAD~1
-npm install
-npm run build
-sudo systemctl restart transcription-palantir
-
-# Or rollback to specific commit
-git reset --hard <commit-sha>
-npm install
-npm run build
-sudo systemctl restart transcription-palantir
 ```
+
+The rollback steps themselves live in **one place**:
+[`docs/DEPLOYMENT.md` → Rollback](DEPLOYMENT.md#rollback). They are not repeated
+here, because the copy that used to be here had drifted twice over: it used
+`git reset --hard` (denied on Mithrandir, and it destroys local drift silently)
+and `sudo systemctl restart` (wrong — the unit is a systemd **user** unit, so
+the command is `systemctl --user restart transcription-palantir`).
 
 Then fix the issue locally and push the fix.
 
