@@ -19,7 +19,7 @@ KillMode=control-group
 TimeoutStopSec=15
 
 # Safety net: force-kill anything left on port 9003 after stop
-ExecStopPost=/usr/bin/fuser -k 9003/tcp
+ExecStopPost=-/usr/bin/fuser -k 9003/tcp
 
 # Restart policy
 # always, not on-failure: a self-initiated shutdown (lost singleton lock,
